@@ -5,7 +5,9 @@
  * EIP-1193 provider with private key signing (no browser needed!)
  */
 
-import { NexusSDK } from '@avail-project/nexus-core';
+// Direct import from dist/index.js to bypass ESM directory import bug
+import pkg from '@avail-project/nexus/dist/index.js';
+const { NexusSDK } = pkg;
 import { ethers } from 'ethers';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
