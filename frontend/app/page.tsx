@@ -214,15 +214,39 @@ export default function Home() {
             
             {connected && pyusdBalance ? (
               <div className="space-y-4">
-                <BridgeButton>
-                  🌉 Bridge PYUSD with Avail Nexus
+                <BridgeButton
+                  prefill={{
+                    fromChainId: 11155111, // Sepolia
+                    toChainId: 1500, // Arbitrum Sepolia
+                    token: 'PYUSD', // Use token symbol instead of address
+                    amount: '0.1' // Start with small test amount
+                  }}
+                >
+                  {({ onClick, isLoading }) => (
+                    <button
+                      onClick={async () => {
+                        try {
+                          log('🌉 Opening Avail Bridge...')
+                          await onClick()
+                          log('✅ Bridge initiated successfully!')
+                        } catch (err: any) {
+                          log(`❌ Bridge error: ${err.message}`)
+                        }
+                      }}
+                      disabled={isLoading}
+                      className="bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
+                    >
+                      {isLoading ? '⏳ Loading Bridge...' : '🌉 Bridge PYUSD with Avail Nexus'}
+                    </button>
+                  )}
                 </BridgeButton>
                 
                 <div className="p-4 bg-blue-50 rounded text-sm">
                   <p className="font-semibold mb-2">💡 Bridge Tips:</p>
                   <ul className="list-disc list-inside space-y-1 text-gray-700">
                     <li>Current PYUSD balance: {pyusdBalance} on Sepolia</li>
-                    <li>You can bridge to Arbitrum Sepolia or other chains</li>
+                    <li>Test amount: 0.1 PYUSD (you can change this)</li>
+                    <li>Destination: Arbitrum Sepolia (chain ID 1500)</li>
                     <li>Avail Nexus handles the cross-chain execution</li>
                   </ul>
                 </div>
