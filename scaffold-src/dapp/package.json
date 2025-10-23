@@ -1,0 +1,27 @@
+{
+  "name": "unchained-dapp",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "next": "14.2.10",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "wagmi": "2.12.21",
+    "@rainbow-me/rainbowkit": "2.2.4",
+    "viem": "2.21.3",
+    "@availproject/nexus": "0.2.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3",
+    "@types/node": "20.14.9",
+    "@types/react": "18.3.4",
+    "@types/react-dom": "18.3.0"
+  }
+}

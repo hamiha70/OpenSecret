@@ -1,0 +1,15 @@
+{
+  "name": "opensecret-erc7540-pyusd",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ERC-7540 PYUSD Vault with Avail Nexus",
+  "scripts": {
+    "test:eip7702": "node scripts/quick-eip7702-test.js",
+    "test:avail": "node scripts/test-avail-sdk.js"
+  },
+  "dependencies": {
+    "ethers": "^6.13.0",
+    "dotenv": "^16.4.0"
+  }
+}
+
