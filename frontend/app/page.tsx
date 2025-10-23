@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { BridgeButton, useNexus } from '@avail-project/nexus-widgets'
 
 export default function Home() {
+  const { setProvider } = useNexus()
   const [status, setStatus] = useState('Initializing...')
   const [connected, setConnected] = useState(false)
   const [address, setAddress] = useState('')
@@ -46,6 +48,10 @@ export default function Home() {
       const userAddress = accounts[0]
       setAddress(userAddress)
       setConnected(true)
+      
+      // Forward provider to Avail Nexus
+      setProvider(provider)
+      log('🔗 Provider forwarded to Avail Nexus')
       
       const chainId = await provider.request({ method: 'eth_chainId' })
       
@@ -145,27 +151,6 @@ export default function Home() {
     }
   }
 
-  const testAvailSDK = async () => {
-    log('🔍 Testing Avail Nexus SDK...')
-    setStatus('Testing Avail SDK...')
-
-    // Check if Avail SDK can be loaded
-    try {
-      log('Checking for Avail Nexus SDK...')
-      log('ℹ️  Avail Nexus requires React/Next.js integration')
-      log('   Install: npm install @availproject/nexus-widgets')
-      log('   Then import BridgeWidget component')
-      log('')
-      log('✅ This test confirms:')
-      log('   - Browser supports Web3 ✅')
-      log('   - Wallet connection works ✅')
-      log('   - Can read PYUSD contract ✅')
-      log('   - Ready for Avail integration ✅')
-      setStatus('Ready for Avail widgets!')
-    } catch (error: any) {
-      log(`❌ Error: ${error.message}`)
-    }
-  }
 
   return (
     <main className="min-h-screen p-8 max-w-4xl mx-auto">
@@ -220,16 +205,33 @@ export default function Home() {
             )}
           </div>
 
-          {/* Step 3: Test Avail SDK */}
+          {/* Step 3: Avail Bridge */}
           <div className="border rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Step 3: Test Avail SDK</h2>
-            <button
-              onClick={testAvailSDK}
-              disabled={!connected}
-              className="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              Test Avail SDK
-            </button>
+            <h2 className="text-xl font-semibold mb-4">Step 3: Bridge with Avail Nexus</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Click the button below to open Avail Nexus bridge and transfer PYUSD across chains!
+            </p>
+            
+            {connected && pyusdBalance ? (
+              <div className="space-y-4">
+                <BridgeButton>
+                  🌉 Bridge PYUSD with Avail Nexus
+                </BridgeButton>
+                
+                <div className="p-4 bg-blue-50 rounded text-sm">
+                  <p className="font-semibold mb-2">💡 Bridge Tips:</p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-700">
+                    <li>Current PYUSD balance: {pyusdBalance} on Sepolia</li>
+                    <li>You can bridge to Arbitrum Sepolia or other chains</li>
+                    <li>Avail Nexus handles the cross-chain execution</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-500 italic">
+                Connect wallet and check PYUSD balance first
+              </p>
+            )}
           </div>
 
           {/* Logs */}
