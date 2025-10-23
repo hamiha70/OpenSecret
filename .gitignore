@@ -39,3 +39,6 @@ cache/
 artifacts/
 typechain/
 typechain-types/
+frontend/.next/
+frontend/out/
+frontend/node_modules/
