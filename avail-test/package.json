@@ -1,0 +1,19 @@
+{
+  "name": "avail-test",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test-synthetic-provider.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@avail-project/nexus": "^0.0.1",
+    "@avail-project/nexus-core": "^0.0.2-beta.5",
+    "dotenv": "^16.6.1",
+    "ethers": "^6.15.0"
+  }
+}
