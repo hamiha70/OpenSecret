@@ -1,1 +1,42 @@
+# Environment variables (contains private keys)
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+build/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary
 temp/
+*.tmp
+avail-test/
+
+# Hardhat
+cache/
+artifacts/
+typechain/
+typechain-types/
