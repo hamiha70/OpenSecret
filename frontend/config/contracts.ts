@@ -3,9 +3,9 @@
  */
 
 export const CONTRACTS = {
-  // OmniVault deployed on Ethereum Sepolia
+  // AsyncVault deployed on Ethereum Sepolia
   vault: {
-    address: '0x1b1870ac9f024d57Bd0670Ba2898CA4ef35eBfbe' as const,
+    address: '0x31144B67A0003f88a53c011625DCC28713CeB9AB' as const,
     chainId: 11155111, // Sepolia
   },
   

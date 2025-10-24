@@ -14,23 +14,27 @@ contract DeployAsyncVault is Script {
     address constant USDC_SEPOLIA = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
     
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("MAIN_PRIVATE_KEY");
+        // Load account configuration
+        uint256 deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
+        address simulator = vm.envAddress("SIMULATOR_ADDRESS");
         
         console.log("============================================");
         console.log("DEPLOYING ASYNCVAULT TO ETHEREUM SEPOLIA");
         console.log("============================================");
-        console.log("Deployer:", deployer);
+        console.log("Deployer (Owner):", deployer);
+        console.log("Operator:", deployer, "(same as owner initially)");
+        console.log("Simulator:", simulator);
         console.log("USDC:", USDC_SEPOLIA);
         console.log("");
         
         vm.startBroadcast(deployerPrivateKey);
         
-        // Deploy vault with deployer as initial operator and simulator
+        // Deploy vault with separate accounts
         AsyncVault vault = new AsyncVault(
             USDC_SEPOLIA,
-            deployer, // Operator (can be changed later)
-            deployer, // Simulator (can be changed later to market bot address)
+            deployer,   // Operator (deployer can also operate, or change to bot later)
+            simulator,  // Simulator (separate account for profit/loss)
             "Async USDC",
             "asUSDC"
         );
@@ -43,9 +47,9 @@ contract DeployAsyncVault is Script {
         console.log("============================================");
         console.log("AsyncVault:", address(vault));
         console.log("Asset (USDC):", address(vault.asset()));
+        console.log("Owner:", vault.owner());
         console.log("Operator:", vault.operator());
         console.log("Simulator:", vault.simulator());
-        console.log("Owner:", vault.owner());
         console.log("");
         console.log("Next steps:");
         console.log("1. Verify contract on Etherscan/Blockscout");

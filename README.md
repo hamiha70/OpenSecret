@@ -1,21 +1,28 @@
-# Cross-Chain Vault with Avail Nexus
+# AsyncVault - ERC-7540 Async Vault with Avail Nexus
 
 **ETHOnline 2025 Hackathon Project**
 
-A cross-chain ERC-7540 async vault with intent-based bridging powered by Avail Nexus. Bridge USDC across testnets in ~27 seconds with minimal fees.
+A single-chain ERC-7540 asynchronous vault with Avail Nexus integration for seamless user onboarding. Deposit USDC, earn simulated yields, and withdraw with guaranteed settlement via the reserve mechanism.
 
 ---
 
-## 🎯 Project Status
+## 🎯 Current Status
 
-✅ **Phase 1: COMPLETE**
-- Working Avail Nexus integration
-- Cross-chain USDC transfer verified
-- Transaction: `0x24a36c2b36a8ef79efb488b95bbd8784058c320a1954154d08feb407e9e8f82f`
+✅ **AsyncVault Deployed & Verified**
+- Contract: `0x31144B67A0003f88a53c011625DCC28713CeB9AB`
+- Network: Ethereum Sepolia
+- Blockscout: [View Contract](https://eth-sepolia.blockscout.com/address/0x31144B67A0003f88a53c011625DCC28713CeB9AB)
 
-🔄 **Phase 2: IN PROGRESS**
-- ERC-7540 vault contracts
-- Frontend integration
+✅ **Frontend Working**
+- Avail Nexus bridge integration
+- USDC balance checking
+- Vault deposit/redeem flow (with operator pattern)
+
+⏳ **Next Steps**
+- Build operator bot (auto-claim)
+- Build market simulator bot (profit/loss)
+- Deploy to AWS
+- Set up Envio indexer
 
 ---
 
@@ -29,25 +36,23 @@ A cross-chain ERC-7540 async vault with intent-based bridging powered by Avail N
 ### Install & Run
 
 ```bash
-# Install dependencies
-npm install
-
-# Start frontend
+# Install frontend dependencies
 cd frontend
 npm install
+
+# Start development server
 npm run dev
 ```
 
 Visit `http://localhost:3000`
 
-### Test Avail Bridge
+### Using the Vault
 
-1. Connect MetaMask wallet
-2. Check USDC balance
-3. Click "Bridge USDC with Avail Nexus"
-4. Complete all MetaMask approvals
-5. Wait ~27 seconds
-6. Verify on Nexus Intent Explorer
+1. **Connect Wallet** - MetaMask on Ethereum Sepolia
+2. **Check Balance** - View your USDC and vault shares
+3. **Bridge (Optional)** - Use Avail Nexus to bridge USDC from other testnets
+4. **Deposit** - Request deposit → Approve claim transaction
+5. **Redeem** - Request redeem → Approve claim transaction
 
 ---
 
@@ -55,19 +60,31 @@ Visit `http://localhost:3000`
 
 ```
 OpenSecret/
-├── README.md
-├── LICENSE
-├── env.example
-├── contracts/          # Vault smart contracts (coming soon)
-├── frontend/           # Next.js app with Avail integration
-├── scripts/            # Deployment scripts
-├── docs/
-│   ├── PROJECT_SPEC.md         # Current specification
-│   ├── AVAIL_SUCCESS.md        # Successful bridge test
-│   ├── USDC_FAUCETS.md         # Testnet USDC guide
-│   ├── BOT_ARCHITECTURE.md     # Bot design (stretch goal)
-│   └── archive/                # Old specifications
-└── temp/               # Research & Discord logs
+├── contracts-foundry/      # Foundry contracts
+│   ├── src/
+│   │   ├── AsyncVault.sol           # Main vault contract (ERC-7540)
+│   │   └── interfaces/
+│   │       └── IProfitLossRealizer.sol
+│   ├── test/
+│   │   └── AsyncVault.t.sol         # 25 comprehensive tests
+│   └── script/
+│       └── DeployAsyncVault.s.sol   # Deployment script
+│
+├── frontend/               # Next.js 14 app
+│   ├── app/
+│   │   └── page.tsx                 # Main UI
+│   └── config/
+│       ├── contracts.ts             # Contract addresses
+│       └── AsyncVault.abi.json      # Contract ABI
+│
+├── docs/                   # Additional documentation
+│   └── specs/
+│       └── multi-chain-ERC4626/     # Original spec (archived)
+│
+├── DEPLOYMENT.md           # Deployment details
+├── ARCHITECTURE.md         # Technical architecture
+├── env.example             # Environment template
+└── README.md               # This file
 ```
 
 ---
@@ -76,76 +93,55 @@ OpenSecret/
 
 ### Tech Stack
 
-- **Smart Contracts:** Solidity, Foundry, ERC-7540
+- **Smart Contracts:** Solidity ^0.8.20, Foundry
 - **Frontend:** Next.js 14, TypeScript, Tailwind CSS
 - **Cross-Chain:** Avail Nexus (`@avail-project/nexus-widgets`)
-- **Wallet:** MetaMask (Wagmi/RainbowKit ready)
+- **Wallet:** MetaMask (via window.ethereum)
 
-### How It Works
+### Key Features
 
-1. **Deposit:** User deposits USDC into vault
-2. **Yield:** Vault deploys capital to yield strategies
-3. **Rebalance:** Bot triggers cross-chain rebalancing via Avail
-4. **Bridge:** Avail Nexus executes intent-based cross-chain transfer (~27s)
-5. **Withdraw:** User can withdraw from any supported chain
+#### 1. ERC-7540 Asynchronous Vault
+- **Two-step deposit/redeem flow** (request → claim)
+- **Reserve mechanism** prevents underfunding during redemptions
+- **Fair share pricing** based on actual USDC balance
+- **Operator pattern** for automated claiming
 
----
+#### 2. Profit/Loss Simulation
+- Market simulator bot calls `realizeProfit(token, amount)`
+- Directly transfers USDC to/from vault (no virtual accounting)
+- Events emitted for indexer tracking
 
-## ✅ Verified Achievement
+#### 3. Avail Nexus Integration
+- Intent-based cross-chain bridging (~27s)
+- Users can onboard from any supported testnet
+- Minimal fees (~$0.001 for small amounts)
 
-### Successful Cross-Chain Bridge
-
-**Transaction Details:**
-- Hash: `0x24a36c2b36a8ef79efb488b95bbd8784058c320a1954154d08feb407e9e8f82f`
-- From: Ethereum Sepolia
-- To: Arbitrum Sepolia
-- Amount: 0.1 USDC
-- Time: 27.2 seconds
-- Fees: 0.000701 USDC (~$0.001)
-- Intent ID: 874 (SUCCESS)
-
-**Evidence:**
-- [Blockscout Transaction](https://eth-sepolia.blockscout.com/tx/0x24a36c2b36a8ef79efb488b95bbd8784058c320a1954154d08feb407e9e8f82f)
-- Nexus Intent Explorer (Intent ID 874)
-- See `docs/AVAIL_SUCCESS.md` for full analysis
-
----
-
-## 🎁 Prize Strategy
-
-### Primary: **Avail Nexus Prize**
-- ✅ Integrated Nexus SDK
-- ✅ Real cross-chain transfer
-- ✅ Intent-based execution
-- ✅ Verifiable on-chain
-
-### Additional Potential Prizes:
-- **Circle:** Using USDC
-- **Blockscout:** Development tooling
-- **Hardhat/Foundry:** Testing infrastructure
+#### 4. Three-Account Architecture
+| Role | Purpose |
+|------|---------|
+| **Deployer** | Contract owner, initial operator |
+| **Investor** | End-user test account |
+| **Simulator** | Market bot for profit/loss simulation |
 
 ---
 
 ## 🔗 Key Contracts
 
-### USDC (Official Circle Deployments)
+### AsyncVault (Sepolia)
+- **Address:** `0x31144B67A0003f88a53c011625DCC28713CeB9AB`
+- **Owner:** `0x36AB88fDd34848C0caF4599736a9D3a860D051Ba`
+- **Operator:** `0x36AB88fDd34848C0caF4599736a9D3a860D051Ba`
+- **Simulator:** `0x7EC14a7709A8dEF1CC0FD21cf617A2aF99990103`
+
+### USDC (Circle Official)
 - **Sepolia:** `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
 - **Arbitrum Sepolia:** `0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d`
 - **Base Sepolia:** `0x036cbd53842c5426634e7929541ec2318f3dcf7e`
 - **OP Sepolia:** `0x5fd84259d66cd46123540766be93dfe6d43130d7`
 
-### Avail Infrastructure
+### Avail Nexus
 - **Bridge Contract:** `0xF0111EdE031a4377C34A4AD900f1E633E41055Dc`
-- **Supported Chains:** Sepolia, Arbitrum Sepolia, Base Sepolia, OP Sepolia, Polygon Amoy, Monad Testnet
-
----
-
-## 📚 Documentation
-
-- **[Project Specification](docs/PROJECT_SPEC.md)** - Full project details
-- **[Avail Success Report](docs/AVAIL_SUCCESS.md)** - Bridge test analysis
-- **[USDC Faucets](docs/USDC_FAUCETS.md)** - Get testnet USDC
-- **[Bot Architecture](docs/BOT_ARCHITECTURE.md)** - Rebalancing logic (future)
+- **Supported Chains:** Sepolia, Arbitrum, Base, Optimism, Polygon Amoy, Monad
 
 ---
 
@@ -157,28 +153,108 @@ OpenSecret/
 # Copy example env
 cp env.example .env
 
-# Add your private key
-# MAIN_PRIVATE_KEY=your_private_key_here
-# ETHEREUM_SEPOLIA_RPC=your_rpc_url
+# Add your keys (see env.example for structure)
+# DEPLOYER_PRIVATE_KEY, SIMULATOR_ADDRESS, etc.
 ```
 
-### Testing (Coming Soon)
+### Smart Contract Development
 
 ```bash
-# Run contract tests
+cd contracts-foundry
+
+# Build contracts
+forge build
+
+# Run tests
 forge test
 
-# Run frontend tests
-cd frontend && npm test
+# Deploy to Sepolia
+source .env
+forge script script/DeployAsyncVault.s.sol:DeployAsyncVault \
+  --rpc-url "$ETHEREUM_SEPOLIA_RPC" \
+  --broadcast
+
+# Verify on Blockscout
+forge verify-contract <ADDRESS> \
+  src/AsyncVault.sol:AsyncVault \
+  --verifier blockscout \
+  --verifier-url https://eth-sepolia.blockscout.com/api \
+  --constructor-args $(cast abi-encode \
+    "constructor(address,address,address,string,string)" \
+    <USDC> <OPERATOR> <SIMULATOR> "Async USDC" "asUSDC") \
+  --watch
 ```
+
+### Frontend Development
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+---
+
+## 🎁 Prize Strategy
+
+### Primary: **Avail Nexus Prize**
+- ✅ Integrated Nexus SDK
+- ✅ BridgeButton component for seamless UX
+- ✅ Real cross-chain USDC transfers
+- ✅ Intent-based execution
+
+### Additional Potential Prizes:
+- **Circle:** Using USDC as primary asset
+- **Blockscout:** Development with Blockscout MCP
+- **Foundry/Hardhat:** Testing infrastructure
+
+---
+
+## 📚 Documentation
+
+- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Deployment details and instructions
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical architecture and design decisions
+- **[ERC7540_RESERVE_MECHANISM.md](docs/ERC7540_RESERVE_MECHANISM.md)** - Reserve mechanism explanation
+- **[OPERATOR_PATTERN_EXPLAINED.md](docs/OPERATOR_PATTERN_EXPLAINED.md)** - Operator pattern details
+- **[AVAIL_SUCCESS.md](docs/AVAIL_SUCCESS.md)** - Proof of working Avail bridge
+- **[USDC_FAUCETS.md](docs/USDC_FAUCETS.md)** - Testnet USDC guide
 
 ---
 
 ## ⚠️ Known Issues
 
-1. **MetaMask shows "Ethereum Mainnet" during Avail sign-in** - This is cosmetic, transactions go to correct network
-2. **PYUSD not supported** - Avail only supports USDC/USDT (verified in Discord)
-3. **Testnet limitations** - Limited solver liquidity, occasional delays
+1. **MetaMask shows "Ethereum Mainnet" during Avail sign-in** - Cosmetic issue, transactions execute on correct network
+2. **Multiple confirmations for ERC-7540** - Expected behavior for 2-step async flow (request + claim)
+3. **Operator bot not yet deployed** - Manual claiming currently, bot implementation in progress
+
+---
+
+## 🧪 Testing
+
+### Contract Tests
+```bash
+cd contracts-foundry
+forge test -vvv
+```
+
+**Test Coverage:**
+- 25 comprehensive tests
+- 100% passing
+- Covers deposits, redeems, profit/loss, reserves, edge cases
+
+### Frontend Testing
+1. Connect MetaMask to Sepolia
+2. Get testnet USDC from [faucet.circle.com](https://faucet.circle.com/)
+3. Test deposit flow (request → claim)
+4. Test redeem flow (request → claim)
+5. Test Avail bridge (optional)
 
 ---
 
@@ -196,9 +272,10 @@ MIT License - see [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- **Avail Project** - Nexus SDK and fast intent-based bridging
+- **Avail Project** - Nexus SDK and intent-based bridging
 - **Circle** - USDC on testnets
 - **Blockscout** - Explorer API and MCP integration
+- **OpenZeppelin** - Smart contract libraries
 - **ETHGlobal** - Amazing hackathon platform
 
 ---
@@ -211,4 +288,4 @@ Built by [@hamiha70](https://github.com/hamiha70) for ETHOnline 2025
 
 **Status:** 🟢 Active Development  
 **Last Updated:** October 24, 2025  
-**Next Milestone:** Deploy ERC-7540 vault contracts
+**Current Phase:** Frontend integration complete, building bots

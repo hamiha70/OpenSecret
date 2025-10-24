@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { BridgeButton, useNexus } from '@avail-project/nexus-widgets'
 import { CONTRACTS } from '../config/contracts'
-import OmniVaultABI from '../config/OmniVault.abi.json'
+import AsyncVaultABI from '../config/AsyncVault.abi.json'
 
 export default function Home() {
   const { setProvider } = useNexus()

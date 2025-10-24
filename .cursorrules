@@ -1,0 +1,148 @@
+# AsyncVault Project Rules for Cursor AI
+
+## 📁 Project Structure
+
+### Documentation Placement
+- **Root Level:** Only `README.md` (project overview with links to detailed docs)
+- **`/docs/` folder:** All detailed technical documentation
+  - `ARCHITECTURE.md` - Complete technical architecture
+  - `DEPLOYMENT.md` - Deployment guide and details
+  - `ERC7540_RESERVE_MECHANISM.md` - Reserve mechanism explanation
+  - `OPERATOR_PATTERN_EXPLAINED.md` - Operator pattern details
+  - `AVAIL_SUCCESS.md` - Historical proof of working Avail bridge
+  - `USDC_FAUCETS.md` - Testing reference
+
+### Smart Contracts
+- **Location:** `contracts-foundry/`
+- **Framework:** Foundry (NOT Hardhat)
+- **Main Contract:** `src/AsyncVault.sol` (ERC-7540 compliant)
+- **Tests:** `test/AsyncVault.t.sol` (comprehensive, 25+ tests)
+- **Deployment:** `script/DeployAsyncVault.s.sol`
+
+### Frontend
+- **Location:** `frontend/`
+- **Framework:** Next.js 14 (App Router)
+- **TypeScript:** Required
+- **Styling:** Tailwind CSS
+- **Key Files:**
+  - `app/page.tsx` - Main UI
+  - `config/contracts.ts` - Contract addresses and chain config
+  - `config/AsyncVault.abi.json` - Generated from Foundry
+
+## 🔧 Development Conventions
+
+### Contract Development
+1. **Always use Foundry** (not Hardhat)
+2. **Run tests before deploying:** `forge test -vvv`
+3. **Environment variables:** Load from `contracts-foundry/.env` (copied from root `.env`)
+4. **Verification:** Use Blockscout (Etherscan often has issues)
+
+### Documentation
+1. **Create new docs in `/docs/` folder** (never in root)
+2. **Link from README.md** to detailed docs
+3. **Delete outdated docs immediately** (no legacy clutter)
+4. **Use markdown format** for all documentation
+
+### Naming Conventions
+- **Contract:** `AsyncVault` (not OmniVault)
+- **Share Token:** `asUSDC` (symbol)
+- **Functions:** Follow ERC-7540 standard (`requestDeposit`, `claimDeposit`, etc.)
+
+## 🚫 What NOT to Do
+
+### Avoid These Patterns
+- ❌ **Do NOT create docs in root** (use `/docs/` folder)
+- ❌ **Do NOT use Hardhat** (we use Foundry)
+- ❌ **Do NOT mock Avail** (use `@avail-project/nexus-widgets` in browser)
+- ❌ **Do NOT use virtual accounting** (use direct USDC transfers for profit/loss)
+- ❌ **Do NOT create temporary/session docs** (consolidate or delete immediately)
+
+### Deprecated Concepts
+- ❌ OmniVault (renamed to AsyncVault)
+- ❌ PYUSD (switched to USDC for Avail compatibility)
+- ❌ virtualProfitLoss (simplified to direct USDC transfers)
+- ❌ Multi-chain deployment (single-chain on Sepolia only)
+
+## ✅ Best Practices
+
+### When Adding Features
+1. Update contract in `contracts-foundry/src/`
+2. Add comprehensive tests in `contracts-foundry/test/`
+3. Run `forge test -vvv` to verify
+4. Update ABI: `forge inspect AsyncVault abi > ../frontend/config/AsyncVault.abi.json`
+5. Update frontend if needed
+6. Update documentation in `/docs/` if architecture changes
+7. Commit with clear message
+
+### When Debugging
+1. Check Blockscout for on-chain state
+2. Use `forge test -vvv` for contract issues
+3. Check browser console for frontend issues
+4. Verify function selectors match (use `cast sig "functionName(types)"`)
+
+### When Deploying
+1. Ensure `.env` exists in `contracts-foundry/` (copy from root if needed)
+2. Run: `forge script script/DeployAsyncVault.s.sol:DeployAsyncVault --rpc-url $ETHEREUM_SEPOLIA_RPC --broadcast`
+3. Verify on Blockscout immediately
+4. Update `frontend/config/contracts.ts` with new address
+5. Update `/docs/DEPLOYMENT.md` with deployment details
+
+## 🎯 Architecture Decisions
+
+### ERC-7540 Compliance
+- Two-step flow (request → claim)
+- Reserve mechanism for guaranteed settlements
+- Operator pattern for automated claiming
+
+### Profit/Loss Mechanism
+- Direct USDC transfers (no virtual accounting)
+- Simulator bot transfers USDC to/from vault
+- Events emitted for indexer tracking
+
+### Account Roles
+- **Deployer:** Contract owner, initial operator
+- **Investor:** End-user for testing
+- **Simulator:** Market bot for profit/loss simulation
+
+### Network Strategy
+- **Single-chain:** Ethereum Sepolia only
+- **Avail Integration:** For user onboarding (cross-chain deposits)
+- **No LayerZero:** Not using for this project
+
+## 📝 Commit Message Format
+
+Use conventional commits:
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `docs:` - Documentation changes
+- `refactor:` - Code refactoring
+- `test:` - Test additions/changes
+- `chore:` - Maintenance tasks
+
+Example:
+```
+feat: Add reserve mechanism to AsyncVault for ERC-7540 compliance
+
+- Implement totalReserved state variable
+- Update requestRedeem to reserve assets immediately
+- Add protection in realizeLoss to prevent touching reserved funds
+- Add 3 new tests for reserve mechanism
+```
+
+## 🔗 Key Links
+
+- **Deployed Contract:** `0x31144B67A0003f88a53c011625DCC28713CeB9AB` (Sepolia)
+- **Blockscout:** https://eth-sepolia.blockscout.com/address/0x31144B67A0003f88a53c011625DCC28713CeB9AB
+- **USDC (Sepolia):** `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
+
+## 🎓 Learning Resources
+
+- **ERC-7540:** https://eips.ethereum.org/EIPS/eip-7540
+- **Avail Nexus:** https://docs.availproject.org/nexus/nexus-cheatsheet
+- **Foundry Book:** https://book.getfoundry.sh/
+
+---
+
+**Last Updated:** October 24, 2025
+**Project:** AsyncVault for ETHOnline 2025
+
