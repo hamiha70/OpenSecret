@@ -49,6 +49,9 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     /// @notice Market simulation bot authorized to realize profit/loss
     address public simulator;
 
+    /// @notice Total assets reserved for pending redemptions (not available for profit/loss)
+    uint256 public totalReserved;
+
     // ERC-7540 Request tracking
     struct DepositRequest {
         uint256 assets;        // Amount of USDC to deposit
@@ -213,10 +216,14 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
         // Calculate assets BEFORE burning shares (to get correct share price)
         uint256 assets = convertToAssets(shares);
 
+        // CRITICAL: Reserve these assets immediately to prevent underfunding
+        require(totalAssets() >= totalReserved + assets, "Insufficient vault liquidity");
+        totalReserved += assets;
+
         // Burn shares immediately (lock them)
         _burn(msg.sender, shares);
 
-        // Record the pending request with snapshotted asset value
+        // Record the pending request with snapshotted AND RESERVED asset value
         pendingRedeems[msg.sender] = RedeemRequest({
             shares: shares,
             assets: assets,
@@ -242,7 +249,10 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
         // Mark as fulfilled
         request.fulfilled = true;
 
-        // Transfer USDC to user
+        // Release the reserve
+        totalReserved -= assets;
+
+        // Transfer USDC to user (guaranteed to succeed since assets were reserved)
         asset.safeTransfer(user, assets);
 
         emit RedeemClaimed(user, request.shares, assets);
@@ -265,13 +275,21 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     /**
      * @notice Total assets under management (USDC in vault + strategy)
      * @dev The actual USDC balance already reflects realized profits/losses
-     *      because the simulator transfers actual tokens. We don't need to add
-     *      virtualProfitLoss here since it's already in the balance.
+     *      because the simulator transfers actual tokens.
      */
     function totalAssets() public view returns (uint256) {
         uint256 vaultBalance = asset.balanceOf(address(this));
         uint256 strategyBalance = strategy != address(0) ? asset.balanceOf(strategy) : 0;
         return vaultBalance + strategyBalance;
+    }
+
+    /**
+     * @notice Total assets available (excludes reserved assets for pending redemptions)
+     * @dev This is what profit/loss should be calculated against
+     */
+    function totalAssetsAvailable() public view returns (uint256) {
+        uint256 total = totalAssets();
+        return total > totalReserved ? total - totalReserved : 0;
     }
 
     /**
@@ -386,11 +404,15 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
      * @param amount Loss amount to remove
      * @dev Transfers USDC from vault to simulator (simulating loss).
      *      The balance decrease automatically decreases share price!
+     *      CRITICAL: Cannot touch reserved assets!
      */
     function realizeLoss(address token, uint256 amount) external override onlySimulator {
         require(token == address(asset), "Wrong token");
         require(amount > 0, "Zero amount");
-        require(asset.balanceOf(address(this)) >= amount, "Insufficient balance");
+        
+        // CRITICAL: Ensure we don't touch reserved assets
+        uint256 available = totalAssetsAvailable();
+        require(amount <= available, "Cannot realize loss from reserved assets");
 
         // Transfer USDC to simulator (representing loss)
         asset.safeTransfer(simulator, amount);
