@@ -9,6 +9,7 @@ export default function Home() {
   const [connected, setConnected] = useState(false)
   const [address, setAddress] = useState('')
   const [usdcBalance, setUsdcBalance] = useState('')
+  const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'in_progress' | 'success' | 'failed'>('idle')
   const [logs, setLogs] = useState<string[]>([])
 
   // USDC addresses from Avail Discord (official Circle deployments)
@@ -231,13 +232,47 @@ export default function Home() {
                   {({ onClick, isLoading }) => (
                     <button
                       onClick={async () => {
+                        setBridgeStatus('in_progress')
                         try {
-                          log('🌉 Opening Avail Bridge for USDC...')
-                          log('   Using officially supported USDC token')
+                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                          log('🌉 STARTING AVAIL BRIDGE TRANSACTION')
+                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                          log('📊 Bridge Config:')
+                          log('   • From: Sepolia (11155111)')
+                          log('   • To: Arbitrum Sepolia (421614)')
+                          log('   • Token: USDC (officially supported)')
+                          log('   • Amount: 0.1 USDC')
+                          log('   • Total USDC: ' + usdcBalance + ' available')
+                          log('')
+                          log('🔄 Opening Avail Nexus widget...')
+                          setStatus('Opening Avail bridge...')
+                          
                           await onClick()
-                          log('✅ Bridge widget opened!')
+                          
+                          log('✅ Bridge widget opened successfully!')
+                          log('📝 Next steps in widget:')
+                          log('   1. ✅ Sign message to enable Nexus')
+                          log('   2. ⏳ Approve USDC token allowance')
+                          log('   3. ⏳ Set spending cap')
+                          log('   4. ⏳ Confirm bridge transaction')
+                          log('')
+                          log('⏳ Waiting for user actions in MetaMask...')
+                          log('   • Watch MetaMask for popups!')
+                          log('   • Do not cancel transactions')
+                          log('   • Each step needs approval')
+                          setStatus('Waiting for MetaMask approvals...')
+                          
+                          // Note: We can't detect completion here as the onClick doesn't return transaction status
+                          // The bridge continues in the background through the Nexus widget
                         } catch (err: any) {
-                          log(`❌ Bridge error: ${err.message}`)
+                          setBridgeStatus('failed')
+                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                          log(`❌ BRIDGE ERROR: ${err.message}`)
+                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                          if (err.stack) {
+                            log(`Stack: ${err.stack}`)
+                          }
+                          setStatus(`Bridge failed: ${err.message}`)
                         }
                       }}
                       disabled={isLoading}
@@ -248,15 +283,27 @@ export default function Home() {
                   )}
                 </BridgeButton>
                 
-                <div className="p-4 bg-blue-50 rounded text-sm">
-                  <p className="font-semibold mb-2">💡 Bridge Tips:</p>
-                  <ul className="list-disc list-inside space-y-1 text-gray-700">
-                    <li>Current USDC balance: {usdcBalance} on Sepolia</li>
-                    <li>Test amount: 0.1 USDC (you can change this)</li>
-                    <li>Destination: Arbitrum Sepolia (chain ID 421614)</li>
-                    <li>✅ USDC is officially supported by Avail (PYUSD is not)</li>
-                    <li>Avail Nexus aggregates liquidity across chains</li>
-                  </ul>
+                <div className="space-y-3">
+                  <div className="p-4 bg-blue-50 rounded text-sm">
+                    <p className="font-semibold mb-2">💡 Bridge Tips:</p>
+                    <ul className="list-disc list-inside space-y-1 text-gray-700">
+                      <li>Current USDC balance: {usdcBalance} on Sepolia</li>
+                      <li>Test amount: 0.1 USDC (you can change this)</li>
+                      <li>Destination: Arbitrum Sepolia (chain ID 421614)</li>
+                      <li>✅ USDC is officially supported by Avail (PYUSD is not)</li>
+                      <li>Avail Nexus aggregates liquidity across chains</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm">
+                    <p className="font-semibold text-yellow-800 mb-2">⚠️ Known UI Quirks:</p>
+                    <ul className="list-disc list-inside space-y-1 text-gray-700">
+                      <li><strong>MetaMask may show "Ethereum Mainnet"</strong> during sign-in - this is cosmetic, you're actually on Sepolia</li>
+                      <li><strong>Transaction steps:</strong> Sign-in → Token Allowance → Spending Cap → Bridge TX</li>
+                      <li><strong>Do NOT cancel</strong> any MetaMask popups during the flow</li>
+                      <li><strong>If cancelled:</strong> Just click the bridge button again and complete all steps</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             ) : (
