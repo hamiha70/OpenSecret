@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/OmniVault.sol";
+import "../src/AsyncVault.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
@@ -22,15 +22,16 @@ contract MockUSDC is ERC20 {
 }
 
 /**
- * @title OmniVaultTest
- * @notice Comprehensive test suite for OmniVault
+ * @title AsyncVaultTest
+ * @notice Comprehensive test suite for AsyncVault
  */
-contract OmniVaultTest is Test {
-    OmniVault public vault;
+contract AsyncVaultTest is Test {
+    AsyncVault public vault;
     MockUSDC public usdc;
 
     address public owner = address(0x1);
     address public operator = address(0x2);
+    address public simulator = address(0x9); // Market simulation bot
     address public user1 = address(0x3);
     address public user2 = address(0x4);
 
@@ -42,22 +43,27 @@ contract OmniVaultTest is Test {
 
         // Deploy vault
         vm.prank(owner);
-        vault = new OmniVault(
+        vault = new AsyncVault(
             address(usdc),
             operator,
-            "OmniVault USDC",
-            "ovUSDC"
+            simulator,
+            "Async USDC",
+            "asUSDC"
         );
 
-        // Mint USDC to test users
+        // Mint USDC to test users and simulator
         usdc.mint(user1, INITIAL_BALANCE);
         usdc.mint(user2, INITIAL_BALANCE);
+        usdc.mint(simulator, INITIAL_BALANCE); // Fund simulator for profit simulation
 
         // Approve vault to spend USDC
         vm.prank(user1);
         usdc.approve(address(vault), type(uint256).max);
 
         vm.prank(user2);
+        usdc.approve(address(vault), type(uint256).max);
+
+        vm.prank(simulator);
         usdc.approve(address(vault), type(uint256).max);
     }
 
@@ -68,22 +74,29 @@ contract OmniVaultTest is Test {
     function test_Deployment() public {
         assertEq(address(vault.asset()), address(usdc), "Wrong asset");
         assertEq(vault.operator(), operator, "Wrong operator");
+        assertEq(vault.simulator(), simulator, "Wrong simulator");
         assertEq(vault.owner(), owner, "Wrong owner");
         assertEq(vault.decimals(), 6, "Wrong decimals");
-        assertEq(vault.name(), "OmniVault USDC", "Wrong name");
-        assertEq(vault.symbol(), "ovUSDC", "Wrong symbol");
+        assertEq(vault.name(), "Async USDC", "Wrong name");
+        assertEq(vault.symbol(), "asUSDC", "Wrong symbol");
     }
 
     function test_RevertIf_InvalidAsset() public {
         vm.expectRevert("Invalid asset");
         vm.prank(owner);
-        new OmniVault(address(0), operator, "Test", "TST");
+        new AsyncVault(address(0), operator, simulator, "Test", "TST");
     }
 
     function test_RevertIf_InvalidOperator() public {
         vm.expectRevert("Invalid operator");
         vm.prank(owner);
-        new OmniVault(address(usdc), address(0), "Test", "TST");
+        new AsyncVault(address(usdc), address(0), simulator, "Test", "TST");
+    }
+
+    function test_RevertIf_InvalidSimulator() public {
+        vm.expectRevert("Invalid simulator");
+        vm.prank(owner);
+        new AsyncVault(address(usdc), operator, address(0), "Test", "TST");
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -208,8 +221,9 @@ contract OmniVaultTest is Test {
         assertEq(vault.balanceOf(user1), 0, "Shares not burned");
 
         // Check pending request recorded
-        (uint256 pendingShares, uint256 timestamp, bool fulfilled) = vault.pendingRedeems(user1);
+        (uint256 pendingShares, uint256 pendingAssets, uint256 timestamp, bool fulfilled) = vault.pendingRedeems(user1);
         assertEq(pendingShares, shares, "Wrong shares");
+        assertEq(pendingAssets, depositAmount, "Wrong assets"); // Should be same as deposit in 1:1 case
         assertEq(timestamp, block.timestamp, "Wrong timestamp");
         assertFalse(fulfilled, "Should not be fulfilled");
 
@@ -258,7 +272,7 @@ contract OmniVaultTest is Test {
         assertEq(usdc.balanceOf(user1), balanceBefore + depositAmount, "USDC not returned");
 
         // Check request fulfilled
-        (,, bool fulfilled) = vault.pendingRedeems(user1);
+        (,,, bool fulfilled) = vault.pendingRedeems(user1);
         assertTrue(fulfilled, "Should be fulfilled");
 
         // Check view function returns 0
@@ -430,6 +444,231 @@ contract OmniVaultTest is Test {
         
         assertEq(vault.totalAssets(), deposit1 + deposit2, "Total assets wrong");
         assertEq(vault.totalSupply(), deposit1 + deposit2, "Total supply wrong"); // 1:1 pricing means supply = assets
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // PROFIT/LOSS REALIZATION TESTS
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    function test_RealizeProfit() public {
+        uint256 depositAmount = 1000 * 1e6; // 1,000 USDC
+        uint256 profitAmount = 50 * 1e6;    // 50 USDC profit (5%)
+
+        // Setup: User deposits
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDeposit(user1);
+
+        // Initial state
+        assertEq(vault.totalAssets(), depositAmount, "Initial total assets");
+        assertEq(vault.convertToAssets(depositAmount), depositAmount, "Initial conversion 1:1");
+
+        // Simulator realizes profit (transfers USDC then calls realizeProfit for event)
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), profitAmount); // Transfer profit to vault
+        vault.realizeProfit(address(usdc), profitAmount);
+        vm.stopPrank();
+
+        // Check state after profit - balance increased automatically!
+        assertEq(vault.totalAssets(), depositAmount + profitAmount, "Total assets increased");
+        
+        // Share price increased: 1000 shares now worth 1050 USDC
+        uint256 shareValue = vault.convertToAssets(depositAmount);
+        assertEq(shareValue, depositAmount + profitAmount, "Share price increased");
+
+        // User redeems and gets profit
+        vm.prank(user1);
+        vault.requestRedeem(depositAmount);
+        
+        vm.prank(operator);
+        vault.claimRedeem(user1);
+
+        // User received profit!
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + profitAmount, "User got profit!");
+    }
+
+    function test_RealizeLoss() public {
+        uint256 depositAmount = 1000 * 1e6; // 1,000 USDC
+        uint256 lossAmount = 30 * 1e6;      // 30 USDC loss (3%)
+
+        // Setup: User deposits
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDeposit(user1);
+
+        assertEq(vault.totalAssets(), depositAmount);
+
+        // Simulator realizes loss
+        vm.prank(simulator);
+        vault.realizeLoss(address(usdc), lossAmount);
+
+        // Check state after loss - balance decreased automatically!
+        assertEq(vault.totalAssets(), depositAmount - lossAmount, "Total assets decreased");
+        assertEq(usdc.balanceOf(simulator), INITIAL_BALANCE + lossAmount, "Simulator received loss");
+
+        // Share price decreased: 1000 shares now worth 970 USDC
+        uint256 shareValue = vault.convertToAssets(depositAmount);
+        assertEq(shareValue, depositAmount - lossAmount, "Share price decreased");
+
+        // User redeems and gets less
+        vm.prank(user1);
+        vault.requestRedeem(depositAmount);
+        
+        vm.prank(operator);
+        vault.claimRedeem(user1);
+
+        // User received less due to loss
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE - lossAmount, "User took loss");
+    }
+
+    function test_RealizeProfitAndLoss_Combined() public {
+        uint256 depositAmount = 1000 * 1e6;
+
+        // Setup
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDeposit(user1);
+
+        // Realize 5% profit
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), 50 * 1e6);
+        vault.realizeProfit(address(usdc), 50 * 1e6);
+        vm.stopPrank();
+
+        assertEq(vault.totalAssets(), 1050 * 1e6, "Total after profit");
+
+        // Realize 2% loss
+        vm.prank(simulator);
+        vault.realizeLoss(address(usdc), 20 * 1e6);
+
+        assertEq(vault.totalAssets(), 1030 * 1e6, "Total after loss (net +3%)");
+
+        // User redeems and gets net profit
+        vm.prank(user1);
+        vault.requestRedeem(depositAmount);
+        vm.prank(operator);
+        vault.claimRedeem(user1);
+
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 30 * 1e6, "User got net profit");
+    }
+
+    function test_RevertIf_RealizeProfitNotSimulator() public {
+        vm.prank(user1);
+        vm.expectRevert("Only simulator");
+        vault.realizeProfit(address(usdc), 10 * 1e6);
+    }
+
+    function test_RevertIf_RealizeLossNotSimulator() public {
+        vm.prank(user1);
+        vm.expectRevert("Only simulator");
+        vault.realizeLoss(address(usdc), 10 * 1e6);
+    }
+
+    function test_RevertIf_RealizeProfitWrongToken() public {
+        address wrongToken = address(0x999);
+        
+        vm.prank(simulator);
+        vm.expectRevert("Wrong token");
+        vault.realizeProfit(wrongToken, 10 * 1e6);
+    }
+
+    function test_RevertIf_RealizeLossWrongToken() public {
+        address wrongToken = address(0x999);
+        
+        vm.prank(simulator);
+        vm.expectRevert("Wrong token");
+        vault.realizeLoss(wrongToken, 10 * 1e6);
+    }
+
+    function test_RevertIf_RealizeProfitZeroAmount() public {
+        vm.prank(simulator);
+        vm.expectRevert("Zero amount");
+        vault.realizeProfit(address(usdc), 0);
+    }
+
+    function test_RevertIf_RealizeLossZeroAmount() public {
+        vm.prank(simulator);
+        vm.expectRevert("Zero amount");
+        vault.realizeLoss(address(usdc), 0);
+    }
+
+    function test_RevertIf_RealizeLossInsufficientBalance() public {
+        // Try to realize loss with empty vault
+        vm.prank(simulator);
+        vm.expectRevert("Insufficient balance");
+        vault.realizeLoss(address(usdc), 100 * 1e6);
+    }
+
+    function test_MultipleUsersWithProfit() public {
+        uint256 deposit1 = 1000 * 1e6;
+        uint256 deposit2 = 2000 * 1e6;
+
+        // User1 deposits
+        vm.prank(user1);
+        vault.requestDeposit(deposit1);
+        vm.prank(operator);
+        vault.claimDeposit(user1);
+
+        // User2 deposits
+        vm.prank(user2);
+        vault.requestDeposit(deposit2);
+        vm.prank(operator);
+        vault.claimDeposit(user2);
+
+        // Both users have shares
+        uint256 shares1 = vault.balanceOf(user1);
+        uint256 shares2 = vault.balanceOf(user2);
+
+        // Realize 10% profit on total assets
+        uint256 profitAmount = 300 * 1e6; // 10% of 3000
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), profitAmount);
+        vault.realizeProfit(address(usdc), profitAmount);
+        vm.stopPrank();
+
+        assertEq(vault.totalAssets(), 3300 * 1e6, "Total with profit");
+
+        // User1 redeems (should get proportional profit)
+        vm.prank(user1);
+        vault.requestRedeem(shares1);
+        vm.prank(operator);
+        vault.claimRedeem(user1);
+
+        // User1 deposited 1000, gets 1100 (10% profit)
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 100 * 1e6, "User1 got profit");
+
+        // User2 redeems
+        vm.prank(user2);
+        vault.requestRedeem(shares2);
+        vm.prank(operator);
+        vault.claimRedeem(user2);
+
+        // User2 deposited 2000, gets 2200 (10% profit)
+        assertEq(usdc.balanceOf(user2), INITIAL_BALANCE + 200 * 1e6, "User2 got profit");
+    }
+
+    function test_SetSimulator() public {
+        address newSimulator = address(0x888);
+
+        vm.prank(owner);
+        vault.setSimulator(newSimulator);
+
+        assertEq(vault.simulator(), newSimulator, "Simulator updated");
+    }
+
+    function test_RevertIf_SetSimulatorNotOwner() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        vault.setSimulator(address(0x888));
+    }
+
+    function test_RevertIf_SetSimulatorZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert("Invalid simulator");
+        vault.setSimulator(address(0));
     }
 }
 

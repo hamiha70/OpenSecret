@@ -5,15 +5,18 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import {IProfitLossRealizer} from "./interfaces/IProfitLossRealizer.sol";
 
 /**
- * @title OmniVault
- * @notice ERC-7540 Async Vault with Operator Pattern for Cross-Chain UX
+ * @title AsyncVault
+ * @notice ERC-7540 Asynchronous Vault with Operator Pattern + Profit/Loss Simulation
  * @dev Implements asynchronous deposit/redeem requests with operator auto-claiming
+ *      AND IProfitLossRealizer for simulated strategy performance
  * 
  * Architecture:
- * - Users call requestDeposit/requestRedeem (async pattern)
+ * - Users call requestDeposit/requestRedeem (ERC-7540 async pattern)
  * - Operator (or frontend) calls claimDeposit/claimRedeem to fulfill requests
+ * - Market bot calls realizeProfit/realizeLoss to simulate strategy performance
  * - Integrates with Avail Nexus for cross-chain user onboarding
  * - Single-chain vault on Ethereum Sepolia holding USDC
  * 
@@ -21,9 +24,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * 1. User bridges USDC via Avail Nexus (from any chain to Sepolia)
  * 2. User calls requestDeposit (1 tx)
  * 3. Frontend polls & operator auto-claims (0 additional user txs)
- * 4. User receives shares instantly from their perspective
+ * 4. Market bot simulates profit/loss → share price changes
+ * 5. User receives shares with dynamic pricing based on performance
  */
-contract OmniVault is ERC20, Ownable {
+contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     using SafeERC20 for IERC20;
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -42,6 +46,9 @@ contract OmniVault is ERC20, Ownable {
     /// @notice Mock strategy contract (for demo purposes)
     address public strategy;
 
+    /// @notice Market simulation bot authorized to realize profit/loss
+    address public simulator;
+
     // ERC-7540 Request tracking
     struct DepositRequest {
         uint256 assets;        // Amount of USDC to deposit
@@ -51,6 +58,7 @@ contract OmniVault is ERC20, Ownable {
 
     struct RedeemRequest {
         uint256 shares;        // Amount of shares to redeem
+        uint256 assets;        // Amount of assets to receive (snapshotted at request time)
         uint256 timestamp;     // When request was made
         bool fulfilled;        // Whether operator has processed it
     }
@@ -71,6 +79,7 @@ contract OmniVault is ERC20, Ownable {
     event RedeemClaimed(address indexed user, uint256 shares, uint256 assets);
     event OperatorUpdated(address indexed oldOperator, address indexed newOperator);
     event StrategyUpdated(address indexed oldStrategy, address indexed newStrategy);
+    event SimulatorUpdated(address indexed oldSimulator, address indexed newSimulator);
 
     // ═════════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
@@ -79,21 +88,25 @@ contract OmniVault is ERC20, Ownable {
     /**
      * @param _asset The underlying asset (USDC address on Sepolia)
      * @param _operator The trusted operator address
+     * @param _simulator The market simulation bot address
      * @param _name ERC20 token name (e.g., "OmniVault USDC")
      * @param _symbol ERC20 token symbol (e.g., "ovUSDC")
      */
     constructor(
         address _asset,
         address _operator,
+        address _simulator,
         string memory _name,
         string memory _symbol
     ) ERC20(_name, _symbol) Ownable(msg.sender) {
         require(_asset != address(0), "Invalid asset");
         require(_operator != address(0), "Invalid operator");
+        require(_simulator != address(0), "Invalid simulator");
 
         asset = IERC20(_asset);
         _assetDecimals = ERC20(_asset).decimals();
         operator = _operator;
+        simulator = _simulator;
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -102,6 +115,11 @@ contract OmniVault is ERC20, Ownable {
 
     modifier onlyOperator() {
         require(msg.sender == operator, "Only operator");
+        _;
+    }
+
+    modifier onlySimulator() {
+        require(msg.sender == simulator, "Only simulator");
         _;
     }
 
@@ -192,12 +210,16 @@ contract OmniVault is ERC20, Ownable {
         RedeemRequest storage existing = pendingRedeems[msg.sender];
         require(existing.shares == 0 || existing.fulfilled, "Pending request exists");
 
+        // Calculate assets BEFORE burning shares (to get correct share price)
+        uint256 assets = convertToAssets(shares);
+
         // Burn shares immediately (lock them)
         _burn(msg.sender, shares);
 
-        // Record the pending request
+        // Record the pending request with snapshotted asset value
         pendingRedeems[msg.sender] = RedeemRequest({
             shares: shares,
+            assets: assets,
             timestamp: block.timestamp,
             fulfilled: false
         });
@@ -214,8 +236,8 @@ contract OmniVault is ERC20, Ownable {
         require(request.shares > 0, "No pending redeem");
         require(!request.fulfilled, "Already fulfilled");
 
-        // Calculate assets to return
-        uint256 assets = convertToAssets(request.shares);
+        // Use the snapshotted assets value from request time
+        uint256 assets = request.assets;
 
         // Mark as fulfilled
         request.fulfilled = true;
@@ -237,11 +259,14 @@ contract OmniVault is ERC20, Ownable {
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
-    // ERC-4626 COMPATIBILITY (VIEW FUNCTIONS)
+    // ERC-4626 COMPATIBILITY (VIEW FUNCTIONS) - Modified for Virtual P&L
     // ═════════════════════════════════════════════════════════════════════════════
 
     /**
      * @notice Total assets under management (USDC in vault + strategy)
+     * @dev The actual USDC balance already reflects realized profits/losses
+     *      because the simulator transfers actual tokens. We don't need to add
+     *      virtualProfitLoss here since it's already in the balance.
      */
     function totalAssets() public view returns (uint256) {
         uint256 vaultBalance = asset.balanceOf(address(this));
@@ -322,6 +347,56 @@ contract OmniVault is ERC20, Ownable {
         // In a real implementation, this would call strategy.withdraw()
         // For demo, we assume strategy can transfer back
         asset.safeTransferFrom(strategy, address(this), amount);
+    }
+
+    /**
+     * @notice Set the simulator address (market bot)
+     * @param newSimulator New simulator address
+     */
+    function setSimulator(address newSimulator) external onlyOwner {
+        require(newSimulator != address(0), "Invalid simulator");
+        address oldSimulator = simulator;
+        simulator = newSimulator;
+        emit SimulatorUpdated(oldSimulator, newSimulator);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // PROFIT/LOSS REALIZATION (IProfitLossRealizer Implementation)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Realize profit from simulated strategies
+     * @param token Token address (must match vault asset - USDC)
+     * @param amount Profit amount that was added
+     * @dev Simulator must transfer USDC to vault BEFORE calling this.
+     *      This function only emits an event for tracking - the actual balance
+     *      increase from the transfer automatically increases share price!
+     */
+    function realizeProfit(address token, uint256 amount) external override onlySimulator {
+        require(token == address(asset), "Wrong token");
+        require(amount > 0, "Zero amount");
+
+        // Just emit event - the USDC transfer already happened and balance reflects it!
+        emit ProfitRealized(token, amount, block.timestamp);
+    }
+
+    /**
+     * @notice Realize loss from simulated strategies
+     * @param token Token address (must match vault asset - USDC)
+     * @param amount Loss amount to remove
+     * @dev Transfers USDC from vault to simulator (simulating loss).
+     *      The balance decrease automatically decreases share price!
+     */
+    function realizeLoss(address token, uint256 amount) external override onlySimulator {
+        require(token == address(asset), "Wrong token");
+        require(amount > 0, "Zero amount");
+        require(asset.balanceOf(address(this)) >= amount, "Insufficient balance");
+
+        // Transfer USDC to simulator (representing loss)
+        asset.safeTransfer(simulator, amount);
+
+        // Emit event for tracking
+        emit LossRealized(token, amount, block.timestamp);
     }
 }
 
