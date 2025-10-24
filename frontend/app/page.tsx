@@ -8,10 +8,12 @@ export default function Home() {
   const [status, setStatus] = useState('Initializing...')
   const [connected, setConnected] = useState(false)
   const [address, setAddress] = useState('')
-  const [pyusdBalance, setPyusdBalance] = useState('')
+  const [usdcBalance, setUsdcBalance] = useState('')
   const [logs, setLogs] = useState<string[]>([])
 
-  const PYUSD_SEPOLIA = '0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9'
+  // USDC addresses from Avail Discord (official Circle deployments)
+  const USDC_SEPOLIA = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'
+  const USDC_ARB_SEPOLIA = '0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d'
 
   const log = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -20,8 +22,9 @@ export default function Home() {
   }
 
   useEffect(() => {
-    log('🚀 Avail Test Page Loaded')
+    log('🚀 Avail Nexus + USDC Test Page Loaded')
     log('Make sure MetaMask is installed and you are on Ethereum Sepolia')
+    log('Get testnet USDC from: https://faucet.circle.com/')
     setStatus('Ready to test')
   }, [])
 
@@ -74,10 +77,10 @@ export default function Home() {
     }
   }
 
-  const checkPYUSD = async () => {
+  const checkUSDC = async () => {
     try {
-      log('💰 Checking PYUSD balance...')
-      setStatus('Checking PYUSD...')
+      log('💰 Checking USDC balance...')
+      setStatus('Checking USDC...')
 
       if (!address) {
         throw new Error('No wallet address connected')
@@ -113,12 +116,12 @@ export default function Home() {
       }
 
       log(`Calling balanceOf for address: ${address}`)
-      log(`PYUSD contract: ${PYUSD_SEPOLIA}`)
+      log(`USDC contract: ${USDC_SEPOLIA}`)
 
       const balanceHex = await provider.request({
         method: 'eth_call',
         params: [{
-          to: PYUSD_SEPOLIA,
+          to: USDC_SEPOLIA,
           data: '0x70a08231000000000000000000000000' + address.slice(2)
         }, 'latest']
       })
@@ -140,9 +143,9 @@ export default function Home() {
         throw new Error(`Invalid balance calculation: hex=${balanceHex}, parsed=${balanceWei}`)
       }
 
-      setPyusdBalance(balance.toFixed(2))
+      setUsdcBalance(balance.toFixed(2))
       
-      log(`✅ PYUSD Balance: ${balance.toFixed(2)}`)
+      log(`✅ USDC Balance: ${balance.toFixed(2)}`)
       setStatus('Balance check complete')
 
     } catch (error: any) {
@@ -155,7 +158,7 @@ export default function Home() {
   return (
     <main className="min-h-screen p-8 max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg p-8">
-        <h1 className="text-3xl font-bold mb-6">🧪 Avail Nexus Browser Test</h1>
+        <h1 className="text-3xl font-bold mb-6">🧪 Cross-Chain USDC Bridge Test</h1>
         
         <div className={`p-4 rounded mb-6 ${
           status.includes('failed') ? 'bg-red-100 text-red-800' :
@@ -185,21 +188,24 @@ export default function Home() {
             )}
           </div>
 
-          {/* Step 2: Check PYUSD */}
+          {/* Step 2: Check USDC */}
           <div className="border rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Step 2: Check PYUSD Balance</h2>
+            <h2 className="text-xl font-semibold mb-4">Step 2: Check USDC Balance</h2>
             <button
-              onClick={checkPYUSD}
+              onClick={checkUSDC}
               disabled={!connected}
               className="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
-              Check PYUSD
+              Check USDC
             </button>
-            {pyusdBalance && (
+            {usdcBalance && (
               <div className="mt-4 p-4 bg-green-50 rounded">
-                <p className="text-2xl font-bold">{pyusdBalance} PYUSD</p>
+                <p className="text-2xl font-bold">{usdcBalance} USDC</p>
                 <p className="text-sm text-gray-600 mt-2">
-                  Contract: <span className="font-mono text-xs">{PYUSD_SEPOLIA}</span>
+                  Contract: <span className="font-mono text-xs">{USDC_SEPOLIA}</span>
+                </p>
+                <p className="text-sm text-blue-600 mt-2">
+                  🪙 Get testnet USDC: <a href="https://faucet.circle.com/" target="_blank" rel="noopener" className="underline">faucet.circle.com</a>
                 </p>
               </div>
             )}
@@ -209,16 +215,16 @@ export default function Home() {
           <div className="border rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Step 3: Bridge with Avail Nexus</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Click the button below to open Avail Nexus bridge and transfer PYUSD across chains!
+              Click the button below to open Avail Nexus bridge and transfer USDC across chains!
             </p>
             
-            {connected && pyusdBalance ? (
+            {connected && usdcBalance ? (
               <div className="space-y-4">
                 <BridgeButton
                   prefill={{
                     fromChainId: 11155111, // Sepolia
-                    toChainId: 1500, // Arbitrum Sepolia
-                    token: 'PYUSD', // Use token symbol instead of address
+                    toChainId: 421614, // Arbitrum Sepolia (corrected chain ID)
+                    token: 'USDC', // USDC is officially supported!
                     amount: '0.1' // Start with small test amount
                   }}
                 >
@@ -226,9 +232,10 @@ export default function Home() {
                     <button
                       onClick={async () => {
                         try {
-                          log('🌉 Opening Avail Bridge...')
+                          log('🌉 Opening Avail Bridge for USDC...')
+                          log('   Using officially supported USDC token')
                           await onClick()
-                          log('✅ Bridge initiated successfully!')
+                          log('✅ Bridge widget opened!')
                         } catch (err: any) {
                           log(`❌ Bridge error: ${err.message}`)
                         }
@@ -236,7 +243,7 @@ export default function Home() {
                       disabled={isLoading}
                       className="bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
                     >
-                      {isLoading ? '⏳ Loading Bridge...' : '🌉 Bridge PYUSD with Avail Nexus'}
+                      {isLoading ? '⏳ Loading Bridge...' : '🌉 Bridge USDC with Avail Nexus'}
                     </button>
                   )}
                 </BridgeButton>
@@ -244,16 +251,17 @@ export default function Home() {
                 <div className="p-4 bg-blue-50 rounded text-sm">
                   <p className="font-semibold mb-2">💡 Bridge Tips:</p>
                   <ul className="list-disc list-inside space-y-1 text-gray-700">
-                    <li>Current PYUSD balance: {pyusdBalance} on Sepolia</li>
-                    <li>Test amount: 0.1 PYUSD (you can change this)</li>
-                    <li>Destination: Arbitrum Sepolia (chain ID 1500)</li>
-                    <li>Avail Nexus handles the cross-chain execution</li>
+                    <li>Current USDC balance: {usdcBalance} on Sepolia</li>
+                    <li>Test amount: 0.1 USDC (you can change this)</li>
+                    <li>Destination: Arbitrum Sepolia (chain ID 421614)</li>
+                    <li>✅ USDC is officially supported by Avail (PYUSD is not)</li>
+                    <li>Avail Nexus aggregates liquidity across chains</li>
                   </ul>
                 </div>
               </div>
             ) : (
               <p className="text-gray-500 italic">
-                Connect wallet and check PYUSD balance first
+                Connect wallet and check USDC balance first
               </p>
             )}
           </div>
