@@ -548,12 +548,14 @@ export default function Home() {
           provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
         }
 
+        // Force fresh data by fetching latest block number (cache-busting)
+        const latestBlock = await provider.request({ method: 'eth_blockNumber', params: [] })
         const pendingHex = await provider.request({
           method: 'eth_call',
           params: [{
             to: VAULT_ADDRESS,
             data: '0xc3702989000000000000000000000000' + address.slice(2) // FIXED SELECTOR
-          }, 'latest']
+          }, latestBlock]
         })
         const pending = parseInt(pendingHex, 16) / 1e6
 
@@ -739,12 +741,14 @@ export default function Home() {
           provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
         }
 
+        // Force fresh data by fetching latest block number (cache-busting)
+        const latestBlock = await provider.request({ method: 'eth_blockNumber', params: [] })
         const pendingHex = await provider.request({
           method: 'eth_call',
           params: [{
             to: VAULT_ADDRESS,
             data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // FIXED SELECTOR
-          }, 'latest']
+          }, latestBlock]
         })
         const pending = parseInt(pendingHex, 16) / 1e6
 
