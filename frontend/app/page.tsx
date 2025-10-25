@@ -340,12 +340,15 @@ export default function Home() {
       }
 
       // Check vault shares (balanceOf)
+      // Force fresh data by getting latest block first
+      const latestBlock = await provider.request({ method: 'eth_blockNumber', params: [] })
+      
       const sharesHex = await provider.request({
         method: 'eth_call',
         params: [{
           to: VAULT_ADDRESS,
           data: '0x70a08231000000000000000000000000' + address.slice(2) // balanceOf(address)
-        }, 'latest']
+        }, latestBlock] // Use actual latest block number instead of 'latest' tag
       })
       const sharesWei = parseInt(sharesHex, 16)
       const shares = sharesWei / 1e6
@@ -358,13 +361,15 @@ export default function Home() {
         params: [{
           to: VAULT_ADDRESS,
           data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address) - FIXED
-        }, 'latest']
+        }, latestBlock] // Use actual latest block
       })
       const pendingDepositWei = parseInt(pendingDepositHex, 16)
       const pendingDep = pendingDepositWei / 1e6
       setPendingDeposit(pendingDep > 0 ? pendingDep.toFixed(6) : '')
       if (pendingDep > 0) {
         log(`⏳ Pending Deposit: ${pendingDep.toFixed(6)} USDC`)
+      } else {
+        log(`✅ No pending deposit`)
       }
 
       // Check pending redeem
@@ -373,7 +378,7 @@ export default function Home() {
         params: [{
           to: VAULT_ADDRESS,
           data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address) - FIXED
-        }, 'latest']
+        }, latestBlock] // Use actual latest block
       })
       const pendingRedeemWei = parseInt(pendingRedeemHex, 16)
       const pendingRed = pendingRedeemWei / 1e6
