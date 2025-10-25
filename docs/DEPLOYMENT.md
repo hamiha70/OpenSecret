@@ -3,13 +3,17 @@
 ## Deployment Details
 
 **Network:** Ethereum Sepolia (Chain ID: 11155111)
-**Contract:** AsyncVault
-**Address:** `0x31144B67A0003f88a53c011625DCC28713CeB9AB`
-**Verification:** ✅ Verified on Blockscout
+**Contract:** AsyncVault (with full operator pattern + auto-claim functions)
+**Address:** `0x8A73589fe295A64e9085708636cb04a29c9c4461`
+**Verification:** ⏳ Pending Blockscout verification
 
 ### Blockscout Links
-- **Contract:** https://eth-sepolia.blockscout.com/address/0x31144B67A0003f88a53c011625DCC28713CeB9AB
+- **Contract:** https://eth-sepolia.blockscout.com/address/0x8A73589fe295A64e9085708636cb04a29c9c4461
 - **USDC (Asset):** https://eth-sepolia.blockscout.com/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+
+### Previous Deployments
+- v2 (with operator pattern, missing For functions): `0x671E0EF681F18Bd0A0bD4122A3b06966e0013E10` (deprecated)
+- v1 (without operator): `0x31144B67A0003f88a53c011625DCC28713CeB9AB` (deprecated)
 
 ## Contract Configuration
 
@@ -45,9 +49,10 @@ AsyncVault(
 
 ## Deployment Transaction
 
-**Gas Used:** 2,427,893
-**ETH Cost:** ~0.0024 ETH
-**Timestamp:** October 24, 2025
+**Gas Used:** 2,466,352
+**ETH Cost:** ~0.0025 ETH  
+**Timestamp:** October 25, 2025
+**Deployment:** v3 (with `claimDepositFor` and `claimRedeemFor` functions)
 
 ## Contract Features
 

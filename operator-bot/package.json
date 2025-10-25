@@ -1,0 +1,21 @@
+{
+  "name": "asyncvault-operator-bot",
+  "version": "1.0.0",
+  "description": "Operator bot for AsyncVault - automatically claims deposits and redeems",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js 2>&1 | grep -v '@TODO'",
+    "start:clean": "./start.sh",
+    "dev": "node --watch index.js",
+    "test": "node test.js"
+  },
+  "keywords": ["ethereum", "vault", "ERC-7540", "operator", "bot"],
+  "author": "hamiha70",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.9.0",
+    "dotenv": "^16.3.1"
+  }
+}
+

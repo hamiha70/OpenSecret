@@ -3,9 +3,9 @@
  */
 
 export const CONTRACTS = {
-  // AsyncVault deployed on Ethereum Sepolia
+  // AsyncVault deployed on Ethereum Sepolia (with operator pattern)
   vault: {
-    address: '0x31144B67A0003f88a53c011625DCC28713CeB9AB' as const,
+    address: '0x8A73589fe295A64e9085708636cb04a29c9c4461' as const,
     chainId: 11155111, // Sepolia
   },
   

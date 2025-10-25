@@ -9,9 +9,9 @@ A single-chain ERC-7540 asynchronous vault with Avail Nexus integration for seam
 ## 🎯 Current Status
 
 ✅ **AsyncVault Deployed & Verified**
-- Contract: `0x31144B67A0003f88a53c011625DCC28713CeB9AB`
+- Contract: `0x8A73589fe295A64e9085708636cb04a29c9c4461`
 - Network: Ethereum Sepolia
-- Blockscout: [View Contract](https://eth-sepolia.blockscout.com/address/0x31144B67A0003f88a53c011625DCC28713CeB9AB)
+- Blockscout: [View Contract](https://eth-sepolia.blockscout.com/address/0x8A73589fe295A64e9085708636cb04a29c9c4461)
 
 ✅ **Frontend Working**
 - Avail Nexus bridge integration
@@ -128,7 +128,7 @@ OpenSecret/
 ## 🔗 Key Contracts
 
 ### AsyncVault (Sepolia)
-- **Address:** `0x31144B67A0003f88a53c011625DCC28713CeB9AB`
+- **Address:** `0x8A73589fe295A64e9085708636cb04a29c9c4461`
 - **Owner:** `0x36AB88fDd34848C0caF4599736a9D3a860D051Ba`
 - **Operator:** `0x36AB88fDd34848C0caF4599736a9D3a860D051Ba`
 - **Simulator:** `0x7EC14a7709A8dEF1CC0FD21cf617A2aF99990103`

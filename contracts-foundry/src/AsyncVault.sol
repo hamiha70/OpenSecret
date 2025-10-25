@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import {IOperator} from "./interfaces/IOperator.sol";
 import {IProfitLossRealizer} from "./interfaces/IProfitLossRealizer.sol";
 
 /**
@@ -27,7 +28,7 @@ import {IProfitLossRealizer} from "./interfaces/IProfitLossRealizer.sol";
  * 4. Market bot simulates profit/loss → share price changes
  * 5. User receives shares with dynamic pricing based on performance
  */
-contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
+contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
     using SafeERC20 for IERC20;
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -43,14 +44,8 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     /// @notice Trusted operator who can fulfill requests on behalf of users
     address public operator;
 
-    /// @notice Mock strategy contract (for demo purposes)
-    address public strategy;
-
     /// @notice Market simulation bot authorized to realize profit/loss
     address public simulator;
-
-    /// @notice Total assets reserved for pending redemptions (not available for profit/loss)
-    uint256 public totalReserved;
 
     // ERC-7540 Request tracking
     struct DepositRequest {
@@ -61,10 +56,11 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
 
     struct RedeemRequest {
         uint256 shares;        // Amount of shares to redeem
-        uint256 assets;        // Amount of assets to receive (snapshotted at request time)
         uint256 timestamp;     // When request was made
         bool fulfilled;        // Whether operator has processed it
     }
+    // NOTE: We follow Centrifuge's pattern - assets are calculated at CLAIM time, not request time.
+    // This avoids race conditions and underfunding in multi-user scenarios.
 
     /// @notice Pending deposit requests by user
     mapping(address => DepositRequest) public pendingDeposits;
@@ -80,9 +76,8 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     event DepositClaimed(address indexed user, uint256 assets, uint256 shares);
     event RedeemRequested(address indexed user, uint256 shares, uint256 timestamp);
     event RedeemClaimed(address indexed user, uint256 shares, uint256 assets);
-    event OperatorUpdated(address indexed oldOperator, address indexed newOperator);
-    event StrategyUpdated(address indexed oldStrategy, address indexed newStrategy);
     event SimulatorUpdated(address indexed oldSimulator, address indexed newSimulator);
+    // OperatorUpdated is declared in IOperator interface
 
     // ═════════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
@@ -156,11 +151,17 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     }
 
     /**
-     * @notice Operator fulfills a deposit request and mints shares
-     * @param user The user whose request to fulfill
-     * @dev Can be called by operator or user themselves (for self-service)
+     * @notice User claims their own deposit (mints shares)
+     * @dev Standard ERC-7540: User calls with no parameters, uses msg.sender
      */
-    function claimDeposit(address user) external {
+    function claimDeposit() external {
+        _claimDeposit(msg.sender);
+    }
+
+    /**
+     * @dev Internal function to process deposit claim
+     */
+    function _claimDeposit(address user) internal {
         DepositRequest storage request = pendingDeposits[user];
         require(request.assets > 0, "No pending deposit");
         require(!request.fulfilled, "Already fulfilled");
@@ -213,20 +214,10 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
         RedeemRequest storage existing = pendingRedeems[msg.sender];
         require(existing.shares == 0 || existing.fulfilled, "Pending request exists");
 
-        // Calculate assets BEFORE burning shares (to get correct share price)
-        uint256 assets = convertToAssets(shares);
-
-        // CRITICAL: Reserve these assets immediately to prevent underfunding
-        require(totalAssets() >= totalReserved + assets, "Insufficient vault liquidity");
-        totalReserved += assets;
-
-        // Burn shares immediately (lock them)
-        _burn(msg.sender, shares);
-
-        // Record the pending request with snapshotted AND RESERVED asset value
+        // Record the pending request (shares will be burned at claim time - Centrifuge pattern)
+        // This keeps totalSupply accurate for share price calculations
         pendingRedeems[msg.sender] = RedeemRequest({
             shares: shares,
-            assets: assets,
             timestamp: block.timestamp,
             fulfilled: false
         });
@@ -235,27 +226,38 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     }
 
     /**
-     * @notice Operator fulfills a redeem request and returns USDC
-     * @param user The user whose request to fulfill
+     * @notice User claims their own redeem (receives USDC)
+     * @dev Standard ERC-7540: User calls with no parameters, uses msg.sender
      */
-    function claimRedeem(address user) external {
+    function claimRedeem() external {
+        _claimRedeem(msg.sender);
+    }
+
+    /**
+     * @dev Internal function to process redeem claim
+     * @dev Following Centrifuge pattern: Calculate assets at claim time based on current share price
+     */
+    function _claimRedeem(address user) internal {
         RedeemRequest storage request = pendingRedeems[user];
         require(request.shares > 0, "No pending redeem");
         require(!request.fulfilled, "Already fulfilled");
 
-        // Use the snapshotted assets value from request time
-        uint256 assets = request.assets;
+        uint256 shares = request.shares;
+        
+        // Calculate assets at CLAIM time (not request time) - Centrifuge pattern
+        // This calculation happens BEFORE burning, so totalSupply is accurate
+        uint256 assets = convertToAssets(shares);
 
         // Mark as fulfilled
         request.fulfilled = true;
 
-        // Release the reserve
-        totalReserved -= assets;
+        // Burn shares at claim time (Centrifuge pattern)
+        _burn(user, shares);
 
-        // Transfer USDC to user (guaranteed to succeed since assets were reserved)
+        // Transfer USDC to user
         asset.safeTransfer(user, assets);
 
-        emit RedeemClaimed(user, request.shares, assets);
+        emit RedeemClaimed(user, shares, assets);
     }
 
     /**
@@ -269,27 +271,36 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
+    // OPERATOR PATTERN: Auto-claim functions
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Operator can claim deposit on behalf of user (automation)
+     * @param user The user whose deposit to claim
+     */
+    function claimDepositFor(address user) external onlyOperator {
+        _claimDeposit(user);
+    }
+
+    /**
+     * @notice Operator can claim redeem on behalf of user (automation)
+     * @param user The user whose redeem to claim
+     */
+    function claimRedeemFor(address user) external onlyOperator {
+        _claimRedeem(user);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
     // ERC-4626 COMPATIBILITY (VIEW FUNCTIONS) - Modified for Virtual P&L
     // ═════════════════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Total assets under management (USDC in vault + strategy)
+     * @notice Total assets under management (USDC in vault only - no strategy)
      * @dev The actual USDC balance already reflects realized profits/losses
      *      because the simulator transfers actual tokens.
      */
     function totalAssets() public view returns (uint256) {
-        uint256 vaultBalance = asset.balanceOf(address(this));
-        uint256 strategyBalance = strategy != address(0) ? asset.balanceOf(strategy) : 0;
-        return vaultBalance + strategyBalance;
-    }
-
-    /**
-     * @notice Total assets available (excludes reserved assets for pending redemptions)
-     * @dev This is what profit/loss should be calculated against
-     */
-    function totalAssetsAvailable() public view returns (uint256) {
-        uint256 total = totalAssets();
-        return total > totalReserved ? total - totalReserved : 0;
+        return asset.balanceOf(address(this));
     }
 
     /**
@@ -336,36 +347,6 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
         emit OperatorUpdated(oldOperator, newOperator);
     }
 
-    /**
-     * @notice Set the strategy contract (for future yield generation)
-     * @param newStrategy Strategy contract address
-     */
-    function setStrategy(address newStrategy) external onlyOwner {
-        address oldStrategy = strategy;
-        strategy = newStrategy;
-        emit StrategyUpdated(oldStrategy, newStrategy);
-    }
-
-    /**
-     * @notice Deposit USDC into strategy (for future yield farming)
-     * @param amount Amount to deposit into strategy
-     */
-    function depositToStrategy(uint256 amount) external onlyOperator {
-        require(strategy != address(0), "No strategy set");
-        require(amount <= asset.balanceOf(address(this)), "Insufficient balance");
-        asset.safeTransfer(strategy, amount);
-    }
-
-    /**
-     * @notice Withdraw USDC from strategy back to vault
-     * @param amount Amount to withdraw from strategy
-     */
-    function withdrawFromStrategy(uint256 amount) external onlyOperator {
-        require(strategy != address(0), "No strategy set");
-        // In a real implementation, this would call strategy.withdraw()
-        // For demo, we assume strategy can transfer back
-        asset.safeTransferFrom(strategy, address(this), amount);
-    }
 
     /**
      * @notice Set the simulator address (market bot)
@@ -409,10 +390,7 @@ contract AsyncVault is ERC20, Ownable, IProfitLossRealizer {
     function realizeLoss(address token, uint256 amount) external override onlySimulator {
         require(token == address(asset), "Wrong token");
         require(amount > 0, "Zero amount");
-        
-        // CRITICAL: Ensure we don't touch reserved assets
-        uint256 available = totalAssetsAvailable();
-        require(amount <= available, "Cannot realize loss from reserved assets");
+        require(amount <= totalAssets(), "Insufficient balance");
 
         // Transfer USDC to simulator (representing loss)
         asset.safeTransfer(simulator, amount);

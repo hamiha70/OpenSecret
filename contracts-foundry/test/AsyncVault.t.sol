@@ -151,7 +151,7 @@ contract AsyncVaultTest is Test {
 
         // Operator claims deposit
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         // Check shares minted
         assertEq(vault.balanceOf(user1), depositAmount, "Shares not minted");
@@ -172,7 +172,7 @@ contract AsyncVaultTest is Test {
 
         // User can claim their own deposit
         vm.prank(user1);
-        vault.claimDeposit(user1);
+        vault.claimDeposit();
 
         assertEq(vault.balanceOf(user1), depositAmount, "Shares not minted");
     }
@@ -180,7 +180,7 @@ contract AsyncVaultTest is Test {
     function test_RevertIf_ClaimDepositNoPending() public {
         vm.prank(operator);
         vm.expectRevert("No pending deposit");
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
     }
 
     function test_RevertIf_ClaimDepositAlreadyFulfilled() public {
@@ -190,12 +190,12 @@ contract AsyncVaultTest is Test {
         vault.requestDeposit(depositAmount);
 
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         // Try to claim again
         vm.prank(operator);
         vm.expectRevert("Already fulfilled");
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -209,7 +209,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         uint256 shares = vault.balanceOf(user1);
 
@@ -217,13 +217,12 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestRedeem(shares);
 
-        // Check shares burned
-        assertEq(vault.balanceOf(user1), 0, "Shares not burned");
+        // Check shares NOT burned yet (Centrifuge pattern - burn at claim time)
+        assertEq(vault.balanceOf(user1), shares, "Shares should not be burned yet");
 
         // Check pending request recorded
-        (uint256 pendingShares, uint256 pendingAssets, uint256 timestamp, bool fulfilled) = vault.pendingRedeems(user1);
+        (uint256 pendingShares, uint256 timestamp, bool fulfilled) = vault.pendingRedeems(user1);
         assertEq(pendingShares, shares, "Wrong shares");
-        assertEq(pendingAssets, depositAmount, "Wrong assets"); // Should be same as deposit in 1:1 case
         assertEq(timestamp, block.timestamp, "Wrong timestamp");
         assertFalse(fulfilled, "Should not be fulfilled");
 
@@ -254,7 +253,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         uint256 shares = vault.balanceOf(user1);
 
@@ -266,13 +265,13 @@ contract AsyncVaultTest is Test {
 
         // Operator claims redeem
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
         // Check USDC returned
         assertEq(usdc.balanceOf(user1), balanceBefore + depositAmount, "USDC not returned");
 
         // Check request fulfilled
-        (,,, bool fulfilled) = vault.pendingRedeems(user1);
+        (,, bool fulfilled) = vault.pendingRedeems(user1);
         assertTrue(fulfilled, "Should be fulfilled");
 
         // Check view function returns 0
@@ -282,7 +281,7 @@ contract AsyncVaultTest is Test {
     function test_RevertIf_ClaimRedeemNoPending() public {
         vm.prank(operator);
         vm.expectRevert("No pending redeem");
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
     }
 
     function test_RevertIf_ClaimRedeemAlreadyFulfilled() public {
@@ -292,7 +291,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         uint256 shares = vault.balanceOf(user1);
 
@@ -302,13 +301,13 @@ contract AsyncVaultTest is Test {
 
         // Claim redeem
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
         // Deposit again to get shares for another redeem request
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         shares = vault.balanceOf(user1);
 
@@ -318,12 +317,12 @@ contract AsyncVaultTest is Test {
 
         // Claim it
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
         // Try to claim the same request again
         vm.prank(operator);
         vm.expectRevert("Already fulfilled");
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -376,14 +375,7 @@ contract AsyncVaultTest is Test {
         vault.setOperator(address(0));
     }
 
-    function test_SetStrategy() public {
-        address mockStrategy = address(0x88);
-
-        vm.prank(owner);
-        vault.setStrategy(mockStrategy);
-
-        assertEq(vault.strategy(), mockStrategy, "Strategy not updated");
-    }
+    // Removed test_SetStrategy() - strategy functionality removed from contract
 
     // ═════════════════════════════════════════════════════════════════════════════
     // FULL FLOW INTEGRATION TEST
@@ -398,7 +390,7 @@ contract AsyncVaultTest is Test {
 
         // 2. Operator claims deposit (mints shares)
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         uint256 shares = vault.balanceOf(user1);
         assertEq(shares, depositAmount, "Shares should equal deposit (1:1)");
@@ -407,11 +399,12 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestRedeem(shares);
 
-        assertEq(vault.balanceOf(user1), 0, "Shares should be burned");
+        // Shares NOT burned yet (Centrifuge pattern - burn at claim time)
+        assertEq(vault.balanceOf(user1), shares, "Shares should not be burned yet");
 
         // 4. Operator claims redeem (returns USDC)
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
         assertEq(usdc.balanceOf(user1), INITIAL_BALANCE, "User should get all USDC back");
     }
@@ -424,7 +417,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestDeposit(deposit1);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         assertEq(vault.balanceOf(user1), deposit1, "User1 shares wrong");
         
@@ -437,7 +430,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user2);
         vault.requestDeposit(deposit2);
         vm.prank(operator);
-        vault.claimDeposit(user2);
+        vault.claimDepositFor(user2);
 
         // Check User2 got expected shares
         assertEq(vault.balanceOf(user2), expectedShares2, "User2 shares wrong");
@@ -458,7 +451,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         // Initial state
         assertEq(vault.totalAssets(), depositAmount, "Initial total assets");
@@ -482,7 +475,7 @@ contract AsyncVaultTest is Test {
         vault.requestRedeem(depositAmount);
         
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
         // User received profit!
         assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + profitAmount, "User got profit!");
@@ -496,7 +489,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         assertEq(vault.totalAssets(), depositAmount);
 
@@ -517,7 +510,7 @@ contract AsyncVaultTest is Test {
         vault.requestRedeem(depositAmount);
         
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
         // User received less due to loss
         assertEq(usdc.balanceOf(user1), INITIAL_BALANCE - lossAmount, "User took loss");
@@ -530,7 +523,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         // Realize 5% profit
         vm.startPrank(simulator);
@@ -550,7 +543,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestRedeem(depositAmount);
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
         assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 30 * 1e6, "User got net profit");
     }
@@ -598,7 +591,7 @@ contract AsyncVaultTest is Test {
     function test_RevertIf_RealizeLossInsufficientBalance() public {
         // Try to realize loss with empty vault
         vm.prank(simulator);
-        vm.expectRevert("Cannot realize loss from reserved assets");
+        vm.expectRevert("Insufficient balance");
         vault.realizeLoss(address(usdc), 100 * 1e6);
     }
 
@@ -610,13 +603,13 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestDeposit(deposit1);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         // User2 deposits
         vm.prank(user2);
         vault.requestDeposit(deposit2);
         vm.prank(operator);
-        vault.claimDeposit(user2);
+        vault.claimDepositFor(user2);
 
         // Both users have shares
         uint256 shares1 = vault.balanceOf(user1);
@@ -635,7 +628,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestRedeem(shares1);
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
         // User1 deposited 1000, gets 1100 (10% profit)
         assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 100 * 1e6, "User1 got profit");
@@ -644,7 +637,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user2);
         vault.requestRedeem(shares2);
         vm.prank(operator);
-        vault.claimRedeem(user2);
+        vault.claimRedeemFor(user2);
 
         // User2 deposited 2000, gets 2200 (10% profit)
         assertEq(usdc.balanceOf(user2), INITIAL_BALANCE + 200 * 1e6, "User2 got profit");
@@ -675,14 +668,14 @@ contract AsyncVaultTest is Test {
     // PROFIT/LOSS BETWEEN REQUEST AND CLAIM TESTS
     // ═════════════════════════════════════════════════════════════════════════════
 
-    function test_ProfitBetweenRequestAndClaim_UserGetsSnapshot() public {
+    function test_ProfitBetweenRequestAndClaim_UserGetsDynamicValue() public {
         uint256 depositAmount = 1000 * 1e6;
 
         // Setup: User deposits
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         uint256 shares = vault.balanceOf(user1);
 
@@ -690,11 +683,7 @@ contract AsyncVaultTest is Test {
         vm.prank(user1);
         vault.requestRedeem(shares);
 
-        // Check pending request has snapshotted assets
-        (uint256 pendingShares, uint256 pendingAssets,,) = vault.pendingRedeems(user1);
-        assertEq(pendingAssets, depositAmount, "Assets snapshotted at request");
-
-        // PROFIT HAPPENS BETWEEN REQUEST AND CLAIM
+        // PROFIT HAPPENS BETWEEN REQUEST AND CLAIM (Centrifuge pattern: user benefits!)
         vm.startPrank(simulator);
         usdc.transfer(address(vault), 50 * 1e6); // +5% profit
         vault.realizeProfit(address(usdc), 50 * 1e6);
@@ -703,53 +692,51 @@ contract AsyncVaultTest is Test {
         // Vault now has 1050 USDC
         assertEq(vault.totalAssets(), 1050 * 1e6, "Vault has profit");
 
-        // User claims redeem
+        // User claims redeem (gets current share value - Centrifuge pattern!)
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
-        // User gets ONLY the snapshotted amount (1000), NOT current value (would be 1050)
-        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE, "User gets snapshot value");
+        // User gets CURRENT value (1050 USDC) because calculation happens at claim time!
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 50 * 1e6, "User gets current value with profit");
         
-        // The 50 USDC profit stays in vault (belongs to other shareholders or protocol)
-        assertEq(vault.totalAssets(), 50 * 1e6, "Profit remains in vault");
+        // Vault is empty
+        assertEq(vault.totalAssets(), 0, "Vault is empty");
     }
 
-    function test_LossBetweenRequestAndClaim_ProtectedByReserve() public {
+    function test_LossBetweenRequestAndClaim_UserGetsDynamicValue() public {
         uint256 depositAmount = 1000 * 1e6;
 
         // Setup: User deposits
         vm.prank(user1);
         vault.requestDeposit(depositAmount);
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
 
         uint256 shares = vault.balanceOf(user1);
 
-        // User requests redeem (reserves 1000 USDC)
+        // User requests redeem
         vm.prank(user1);
         vault.requestRedeem(shares);
 
-        // Check reserve was created
-        assertEq(vault.totalReserved(), depositAmount, "Assets reserved");
-        assertEq(vault.totalAssetsAvailable(), 0, "No available assets");
-
-        // Try to realize loss - should FAIL because all assets are reserved!
+        // LOSS HAPPENS BETWEEN REQUEST AND CLAIM (Centrifuge pattern: user bears the loss!)
         vm.prank(simulator);
-        vm.expectRevert("Cannot realize loss from reserved assets");
-        vault.realizeLoss(address(usdc), 30 * 1e6);
+        vault.realizeLoss(address(usdc), 30 * 1e6); // -3% loss
 
-        // User can still claim their reserved amount
+        // Vault now has 970 USDC
+        assertEq(vault.totalAssets(), 970 * 1e6, "Vault has loss");
+
+        // User claims redeem (gets current share value - Centrifuge pattern!)
         vm.prank(operator);
-        vault.claimRedeem(user1);
+        vault.claimRedeemFor(user1);
 
-        // User gets their full amount (protected by reserve)
-        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE, "User gets full snapshot");
+        // User gets CURRENT value (970 USDC) because calculation happens at claim time!
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE - 30 * 1e6, "User bears the loss");
         
-        // Reserve released after claim
-        assertEq(vault.totalReserved(), 0, "Reserve released");
+        // Vault is empty
+        assertEq(vault.totalAssets(), 0, "Vault is empty");
     }
 
-    function test_MultipleUsersWithProfitBetweenRequestAndClaim_ReservePreventsFrontRunning() public {
+    function test_MultipleUsersWithProfitBetweenRequestAndClaim() public {
         uint256 deposit1 = 1000 * 1e6;
         uint256 deposit2 = 1000 * 1e6;
 
@@ -760,58 +747,306 @@ contract AsyncVaultTest is Test {
         vault.requestDeposit(deposit2);
         
         vm.prank(operator);
-        vault.claimDeposit(user1);
+        vault.claimDepositFor(user1);
         vm.prank(operator);
-        vault.claimDeposit(user2);
+        vault.claimDepositFor(user2);
 
-        // Both have 1000 shares
+        // Both have 1000 shares (total supply = 2000, total assets = 2000)
         assertEq(vault.balanceOf(user1), 1000 * 1e6);
         assertEq(vault.balanceOf(user2), 1000 * 1e6);
 
-        // User1 requests redeem FIRST (reserves 1000 USDC)
+        // User1 requests redeem FIRST
         vm.prank(user1);
         vault.requestRedeem(1000 * 1e6);
 
-        assertEq(vault.totalReserved(), 1000 * 1e6, "User1 reserve");
-
-        // PROFIT happens AFTER user1 request
+        // PROFIT happens AFTER user1 request but BEFORE user1 claim (Centrifuge: user1 gets profit!)
         vm.startPrank(simulator);
         usdc.transfer(address(vault), 100 * 1e6); // +100 USDC profit
         vault.realizeProfit(address(usdc), 100 * 1e6);
         vm.stopPrank();
 
-        // Now totalAssets = 2100 (1000 reserved + 1000 user2 + 100 profit)
-        // User2 still has 1000 shares, totalSupply = 1000
-        // User2's shares worth: 1000 * 2100 / 1000 = 2100 USDC
-        
-        // User2 tries to request redeem for ALL 2100 USDC - should FAIL!
-        // Because only 1100 USDC is available (2100 total - 1000 reserved)
-        vm.prank(user2);
-        vm.expectRevert("Insufficient vault liquidity");
-        vault.requestRedeem(1000 * 1e6); // Would need 2100 USDC but only 1100 available
+        // Now totalAssets = 2100, totalSupply = 2000 (shares NOT burned at request!)
+        // User1's 1000 shares worth: 1000 * 2100 / 2000 = 1050 USDC
+        assertEq(vault.totalAssets(), 2100 * 1e6, "Vault has profit");
 
-        // User2 can only redeem proportionally (1100 USDC available / 2100 per share = ~52% of shares)
-        // Let's say user2 redeems 500 shares instead
-        uint256 user2Shares = 500 * 1e6;
-        uint256 expectedAssets = vault.convertToAssets(user2Shares); // ~1050 USDC
-
-        vm.prank(user2);
-        vault.requestRedeem(user2Shares);
-
-        // Check reserves
-        assertEq(vault.totalReserved(), 1000 * 1e6 + expectedAssets, "Both reserves");
-
-        // Both can claim
+        // User1 claims (gets proportional profit because Centrifuge pattern calculates at claim time!)
         vm.prank(operator);
-        vault.claimRedeem(user1);
-        vm.prank(operator);
-        vault.claimRedeem(user2);
+        vault.claimRedeemFor(user1);
 
-        // User1 gets their reserved 1000
-        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE, "User1 gets reserved amount");
+        // User1 gets 1050 USDC (their proportional share of profit: 50% of 100 USDC profit = 50 USDC)
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 50 * 1e6, "User1 gets profit");
         
-        // User2 gets their proportional share
-        assertEq(usdc.balanceOf(user2), INITIAL_BALANCE - deposit2 + expectedAssets, "User2 gets proportional");
+        // Vault has 1050 USDC left (user2 still has 1000 shares worth 1050 USDC)
+        assertEq(vault.totalAssets(), 1050 * 1e6, "Vault has assets for user2");
+        assertEq(vault.balanceOf(user2), 1000 * 1e6, "User2 still has shares");
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // OPERATOR PATTERN ACCESS CONTROL TESTS
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    function test_RevertIf_ClaimDepositFor_NotOperator() public {
+        uint256 depositAmount = 1000 * 1e6;
+        
+        // User1 requests deposit
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        
+        // user2 (not operator) tries to claim for user1
+        vm.prank(user2);
+        vm.expectRevert("Only operator");
+        vault.claimDepositFor(user1);
+    }
+
+    function test_RevertIf_ClaimDepositFor_UserTriesToClaimForOther() public {
+        uint256 depositAmount = 1000 * 1e6;
+        
+        // User1 requests deposit
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        
+        // User2 requests their own deposit
+        vm.prank(user2);
+        vault.requestDeposit(depositAmount);
+        
+        // User1 tries to claim for User2 (should fail)
+        vm.prank(user1);
+        vm.expectRevert("Only operator");
+        vault.claimDepositFor(user2);
+        
+        // User1 can claim their own via claimDeposit()
+        vm.prank(user1);
+        vault.claimDeposit(); // This should work
+    }
+
+    function test_RevertIf_ClaimRedeemFor_NotOperator() public {
+        uint256 depositAmount = 1000 * 1e6;
+        
+        // Setup: user1 deposits and gets shares
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user1);
+        
+        // User1 requests redeem
+        vm.prank(user1);
+        vault.requestRedeem(depositAmount);
+        
+        // user2 (not operator) tries to claim redeem for user1
+        vm.prank(user2);
+        vm.expectRevert("Only operator");
+        vault.claimRedeemFor(user1);
+    }
+
+    function test_RevertIf_ClaimRedeemFor_UserTriesToClaimForOther() public {
+        uint256 depositAmount = 1000 * 1e6;
+        
+        // Setup: both users deposit and get shares
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user1);
+        
+        vm.prank(user2);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user2);
+        
+        // Both users request redeem
+        vm.prank(user1);
+        vault.requestRedeem(depositAmount);
+        
+        vm.prank(user2);
+        vault.requestRedeem(depositAmount);
+        
+        // User1 tries to claim for User2 (should fail)
+        vm.prank(user1);
+        vm.expectRevert("Only operator");
+        vault.claimRedeemFor(user2);
+        
+        // User1 can claim their own via claimRedeem()
+        vm.prank(user1);
+        vault.claimRedeem(); // This should work
+    }
+
+    function test_ClaimDepositFor_OperatorCanClaimForMultipleUsers() public {
+        uint256 depositAmount = 1000 * 1e6;
+        
+        // User1 requests and claims first (bootstrap: 1:1 ratio)
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user1);
+        
+        // User2 requests and claims (should get same shares at 1:1 ratio)
+        vm.prank(user2);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user2);
+        
+        // User3 requests and claims (should get same shares at 1:1 ratio)
+        address user3 = makeAddr("user3");
+        usdc.mint(user3, INITIAL_BALANCE);
+        vm.prank(user3);
+        usdc.approve(address(vault), type(uint256).max);
+        vm.prank(user3);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user3);
+        
+        // Verify all got same shares (1:1 ratio maintained)
+        assertEq(vault.balanceOf(user1), depositAmount, "User1 got shares");
+        assertEq(vault.balanceOf(user2), depositAmount, "User2 got shares");
+        assertEq(vault.balanceOf(user3), depositAmount, "User3 got shares");
+    }
+
+    function test_ClaimRedeemFor_OperatorCanClaimForMultipleUsers() public {
+        uint256 depositAmount = 1000 * 1e6;
+        
+        // Setup: multiple users deposit and get shares
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user1);
+        
+        vm.prank(user2);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user2);
+        
+        address user3 = makeAddr("user3");
+        usdc.mint(user3, INITIAL_BALANCE);
+        vm.prank(user3);
+        usdc.approve(address(vault), type(uint256).max);
+        vm.prank(user3);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user3);
+        
+        // All users request redeem
+        vm.prank(user1);
+        vault.requestRedeem(depositAmount);
+        
+        vm.prank(user2);
+        vault.requestRedeem(depositAmount);
+        
+        vm.prank(user3);
+        vault.requestRedeem(depositAmount);
+        
+        // Operator claims for all users
+        vm.startPrank(operator);
+        vault.claimRedeemFor(user1);
+        vault.claimRedeemFor(user2);
+        vault.claimRedeemFor(user3);
+        vm.stopPrank();
+        
+        // Verify all got USDC back
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE, "User1 got USDC back");
+        assertEq(usdc.balanceOf(user2), INITIAL_BALANCE, "User2 got USDC back");
+        assertEq(usdc.balanceOf(user3), INITIAL_BALANCE, "User3 got USDC back");
+    }
+
+    function test_ClaimDeposit_UserSelfClaimUsesMsgSender() public {
+        uint256 deposit1 = 1000 * 1e6;
+        uint256 deposit2 = 2000 * 1e6;
+        
+        // Both users request deposits
+        vm.prank(user1);
+        vault.requestDeposit(deposit1);
+        
+        vm.prank(user2);
+        vault.requestDeposit(deposit2);
+        
+        // Each user claims their own (no address parameter needed)
+        vm.prank(user1);
+        vault.claimDeposit(); // Claims user1's deposit automatically
+        
+        vm.prank(user2);
+        vault.claimDeposit(); // Claims user2's deposit automatically
+        
+        // Verify correct amounts
+        assertEq(vault.balanceOf(user1), deposit1, "User1 got correct shares");
+        assertEq(vault.balanceOf(user2), deposit2, "User2 got correct shares");
+    }
+
+    function test_ClaimRedeem_UserSelfClaimUsesMsgSender() public {
+        uint256 deposit1 = 1000 * 1e6;
+        uint256 deposit2 = 2000 * 1e6;
+        
+        // Setup: both users deposit
+        vm.prank(user1);
+        vault.requestDeposit(deposit1);
+        vm.prank(operator);
+        vault.claimDepositFor(user1);
+        
+        vm.prank(user2);
+        vault.requestDeposit(deposit2);
+        vm.prank(operator);
+        vault.claimDepositFor(user2);
+        
+        // Both users request redeem
+        vm.prank(user1);
+        vault.requestRedeem(deposit1);
+        
+        vm.prank(user2);
+        vault.requestRedeem(deposit2);
+        
+        // Each user claims their own (no address parameter needed)
+        vm.prank(user1);
+        vault.claimRedeem(); // Claims user1's redeem automatically
+        
+        vm.prank(user2);
+        vault.claimRedeem(); // Claims user2's redeem automatically
+        
+        // Verify correct amounts
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE, "User1 got USDC back");
+        assertEq(usdc.balanceOf(user2), INITIAL_BALANCE, "User2 got USDC back");
+    }
+
+    function test_ClaimDeposit_RaceCondition_FirstClaimWins() public {
+        uint256 depositAmount = 1000 * 1e6;
+        
+        // User requests deposit
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        
+        // User claims first
+        vm.prank(user1);
+        vault.claimDeposit();
+        
+        // Operator tries to claim (should fail - already fulfilled)
+        vm.prank(operator);
+        vm.expectRevert("Already fulfilled");
+        vault.claimDepositFor(user1);
+        
+        // Verify user got shares
+        assertEq(vault.balanceOf(user1), depositAmount, "User got shares");
+    }
+
+    function test_ClaimRedeem_RaceCondition_FirstClaimWins() public {
+        uint256 depositAmount = 1000 * 1e6;
+        
+        // Setup: user deposits
+        vm.prank(user1);
+        vault.requestDeposit(depositAmount);
+        vm.prank(operator);
+        vault.claimDepositFor(user1);
+        
+        // User requests redeem
+        vm.prank(user1);
+        vault.requestRedeem(depositAmount);
+        
+        // Operator claims first
+        vm.prank(operator);
+        vault.claimRedeemFor(user1);
+        
+        // User tries to claim (should fail - already fulfilled)
+        vm.prank(user1);
+        vm.expectRevert("Already fulfilled");
+        vault.claimRedeem();
+        
+        // Verify user got USDC back
+        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE, "User got USDC back");
     }
 }
 

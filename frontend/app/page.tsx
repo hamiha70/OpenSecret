@@ -16,6 +16,7 @@ export default function Home() {
   const [pendingRedeem, setPendingRedeem] = useState('')
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'in_progress' | 'success' | 'failed'>('idle')
   const [logs, setLogs] = useState<string[]>([])
+  const [operatorBotEnabled, setOperatorBotEnabled] = useState(false)
   
   // Use useRef instead of useState to avoid closure issues in setInterval
   const isClaimingDepositRef = useRef(false)
@@ -85,6 +86,85 @@ export default function Home() {
     } catch (error: any) {
       log(`❌ Error: ${error.message}`)
       setStatus(`Connection failed: ${error.message}`)
+    }
+  }
+
+  const approveUSDC = async () => {
+    try {
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      log('✅ APPROVING USDC FOR VAULT')
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      setStatus('Approving USDC...')
+
+      let provider = window.ethereum
+      if (window.ethereum?.providers) {
+        provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
+      }
+
+      // Approve max uint256 for unlimited spending
+      const maxApproval = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+      
+      log('💰 Approving unlimited USDC for vault...')
+      log('   (This is a one-time approval)')
+      const approveTx = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: USDC_SEPOLIA,
+          data: '0x095ea7b3' + // approve(address,uint256)
+                VAULT_ADDRESS.slice(2).padStart(64, '0') + // vault address
+                maxApproval.slice(2), // max amount
+          gas: '0x' + (100000).toString(16)
+        }]
+      })
+      
+      log(`📤 Approval tx: ${approveTx}`)
+      log('⏳ Waiting for confirmation...')
+      await waitForTransaction(provider, approveTx)
+      
+      log('✅ USDC approved! You can now deposit without approval popups')
+      setStatus('✅ USDC approved for vault')
+    } catch (error: any) {
+      log(`❌ Approval error: ${error.message}`)
+      setStatus(`Approval failed: ${error.message}`)
+    }
+  }
+
+  const revokeUSDC = async () => {
+    try {
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      log('🚫 REVOKING USDC APPROVAL')
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      setStatus('Revoking USDC approval...')
+
+      let provider = window.ethereum
+      if (window.ethereum?.providers) {
+        provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
+      }
+
+      // Approve 0 to revoke
+      log('🔒 Setting approval to 0...')
+      const revokeTx = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: USDC_SEPOLIA,
+          data: '0x095ea7b3' + // approve(address,uint256)
+                VAULT_ADDRESS.slice(2).padStart(64, '0') + // vault address
+                '0000000000000000000000000000000000000000000000000000000000000000', // 0 amount
+          gas: '0x' + (100000).toString(16)
+        }]
+      })
+      
+      log(`📤 Revoke tx: ${revokeTx}`)
+      log('⏳ Waiting for confirmation...')
+      await waitForTransaction(provider, revokeTx)
+      
+      log('✅ USDC approval revoked! Vault can no longer spend your USDC')
+      setStatus('✅ USDC approval revoked')
+    } catch (error: any) {
+      log(`❌ Revoke error: ${error.message}`)
+      setStatus(`Revoke failed: ${error.message}`)
     }
   }
 
@@ -274,13 +354,20 @@ export default function Home() {
       log('')
       log('⚠️  NOTE: ERC-7540 requires 2-step flow:')
       log('   1. Request deposit (✅ done)')
-      log('   2. Claim shares (⏳ next - you will need to approve this)')
+      log('   2. Claim shares (⏳ next)')
       log('')
-      log('🔄 Starting auto-claim polling...')
-      setStatus('⏳ Deposit pending - please approve CLAIM transaction when it appears')
       
-      // Start polling for claim
-      pollAndClaimDeposit()
+      if (operatorBotEnabled) {
+        log('🤖 Operator bot mode ENABLED - bot will auto-claim for you')
+        log('   (No MetaMask popup needed for claim)')
+        setStatus('⏳ Deposit pending - operator bot will claim automatically')
+      } else {
+        log('👤 Self-claim mode - you will need to approve claim transaction')
+        log('🔄 Starting auto-claim polling...')
+        setStatus('⏳ Deposit pending - please approve CLAIM transaction when it appears')
+        // Start polling for claim
+        pollAndClaimDeposit()
+      }
 
     } catch (error: any) {
       log(`❌ Deposit error: ${error.message}`)
@@ -392,13 +479,20 @@ export default function Home() {
       log('')
       log('⚠️  NOTE: ERC-7540 requires 2-step flow:')
       log('   1. Request redeem (✅ done)')
-      log('   2. Claim USDC (⏳ next - you will need to approve this)')
+      log('   2. Claim USDC (⏳ next)')
       log('')
-      log('🔄 Starting auto-claim polling...')
-      setStatus('⏳ Redeem pending - please approve CLAIM transaction when it appears')
       
-      // Start polling for claim
-      pollAndClaimRedeem()
+      if (operatorBotEnabled) {
+        log('🤖 Operator bot mode ENABLED - bot will auto-claim for you')
+        log('   (No MetaMask popup needed for claim)')
+        setStatus('⏳ Redeem pending - operator bot will claim automatically')
+      } else {
+        log('👤 Self-claim mode - you will need to approve claim transaction')
+        log('🔄 Starting auto-claim polling...')
+        setStatus('⏳ Redeem pending - please approve CLAIM transaction when it appears')
+        // Start polling for claim
+        pollAndClaimRedeem()
+      }
 
     } catch (error: any) {
       log(`❌ Redeem error: ${error.message}`)
@@ -544,6 +638,45 @@ export default function Home() {
             )}
           </div>
 
+          {/* Operator Bot Toggle */}
+          {connected && (
+            <div className="border rounded-lg p-6 bg-gradient-to-r from-purple-50 to-blue-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold mb-2">🤖 Operator Bot Mode</h2>
+                  <p className="text-sm text-gray-600">
+                    {operatorBotEnabled 
+                      ? 'Bot will automatically claim deposits/redeems (no MetaMask popups)'
+                      : 'You will approve each claim transaction in MetaMask'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setOperatorBotEnabled(!operatorBotEnabled)
+                    log(operatorBotEnabled 
+                      ? '👤 Switched to SELF-CLAIM mode (you approve each claim)'
+                      : '🤖 Switched to OPERATOR BOT mode (bot auto-claims)')
+                  }}
+                  className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                    operatorBotEnabled
+                      ? 'bg-purple-500 text-white hover:bg-purple-600'
+                      : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                  }`}
+                >
+                  {operatorBotEnabled ? '✅ Bot Enabled' : '⭕ Bot Disabled'}
+                </button>
+              </div>
+              {operatorBotEnabled && (
+                <div className="mt-4 p-3 bg-purple-100 border-l-4 border-purple-500 rounded text-sm">
+                  <p className="font-semibold text-purple-900 mb-1">Note:</p>
+                  <p className="text-purple-800">
+                    Make sure the operator bot is running: <code className="bg-purple-200 px-2 py-1 rounded">cd operator-bot && npm start</code>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Step 2: Check USDC */}
           <div className="border rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Step 2: Check USDC Balance</h2>
@@ -555,14 +688,40 @@ export default function Home() {
               Check USDC
             </button>
             {usdcBalance && (
-              <div className="mt-4 p-4 bg-green-50 rounded">
-                <p className="text-2xl font-bold">{usdcBalance} USDC</p>
-                <p className="text-sm text-gray-600 mt-2">
-                  Contract: <span className="font-mono text-xs">{USDC_SEPOLIA}</span>
-                </p>
-                <p className="text-sm text-blue-600 mt-2">
-                  🪙 Get testnet USDC: <a href="https://faucet.circle.com/" target="_blank" rel="noopener" className="underline">faucet.circle.com</a>
-                </p>
+              <div className="mt-4 space-y-3">
+                <div className="p-4 bg-green-50 rounded">
+                  <p className="text-2xl font-bold">{usdcBalance} USDC</p>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Contract: <span className="font-mono text-xs">{USDC_SEPOLIA}</span>
+                  </p>
+                  <p className="text-sm text-blue-600 mt-2">
+                    🪙 Get testnet USDC: <a href="https://faucet.circle.com/" target="_blank" rel="noopener" className="underline">faucet.circle.com</a>
+                  </p>
+                </div>
+                
+                <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                  <p className="font-semibold text-yellow-900 mb-2">💡 One-Click Deposits</p>
+                  <p className="text-sm text-yellow-800 mb-3">
+                    Approve USDC once, then deposits require only 1 MetaMask popup!
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={approveUSDC}
+                      className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 font-semibold text-sm"
+                    >
+                      ✅ Approve USDC
+                    </button>
+                    <button
+                      onClick={revokeUSDC}
+                      className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 font-semibold text-sm"
+                    >
+                      🚫 Revoke Approval
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-2">
+                    💡 You can revoke approval anytime for security
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -748,7 +907,11 @@ export default function Home() {
                       onClick={() => {
                         const input = document.getElementById('redeemAmount') as HTMLInputElement
                         if (input && input.value) {
+                          log(`🔍 Redeem button clicked with input value: ${input.value}`)
                           redeemFromVault(input.value)
+                        } else {
+                          log(`⚠️  Redeem button clicked but no value entered`)
+                          setStatus('Please enter an amount to redeem')
                         }
                       }}
                       disabled={!vaultShares || parseFloat(vaultShares) === 0}
@@ -777,10 +940,10 @@ export default function Home() {
                 <div className="p-4 bg-blue-50 rounded text-sm">
                   <p className="font-semibold mb-2">ℹ️ How It Works:</p>
                   <ul className="list-disc list-inside space-y-1 text-gray-700">
-                    <li><strong>Deposit:</strong> USDC → Approve → Request → Auto-claim → Get ovUSDC shares</li>
+                    <li><strong>Deposit:</strong> USDC → Approve → Request → Auto-claim → Get asUSDC shares</li>
                     <li><strong>Redeem:</strong> Burn shares → Request → Auto-claim → Get USDC back</li>
-                    <li><strong>Auto-claiming:</strong> Frontend polls every 3 seconds and claims for you</li>
-                    <li><strong>1:1 Pricing:</strong> 1 USDC = 1 ovUSDC (for MVP)</li>
+                    <li><strong>Auto-claiming:</strong> {operatorBotEnabled ? '🤖 Operator bot claims automatically' : '👤 Frontend polls every 3 seconds and you approve'}</li>
+                    <li><strong>1:1 Pricing:</strong> 1 USDC = 1 asUSDC (initially)</li>
                   </ul>
                 </div>
               </div>

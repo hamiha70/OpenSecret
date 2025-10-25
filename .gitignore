@@ -25,6 +25,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+operator-bot/logs/
 
 # Testing
 coverage/
