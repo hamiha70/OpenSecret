@@ -12,6 +12,7 @@ export default function Home() {
   const [address, setAddress] = useState('')
   const [usdcBalance, setUsdcBalance] = useState('')
   const [vaultShares, setVaultShares] = useState('')
+  const [vaultUSDCBalance, setVaultUSDCBalance] = useState('') // Total USDC in vault
   const [pendingDeposit, setPendingDeposit] = useState('')
   const [pendingRedeem, setPendingRedeem] = useState('')
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'in_progress' | 'success' | 'failed'>('idle')
@@ -392,6 +393,20 @@ export default function Home() {
       if (pendingRed > 0) {
         log(`⏳ Pending Redeem: ${pendingRed.toFixed(6)} shares`)
       }
+
+      // Check vault's total USDC balance - fetch fresh block number separately
+      const vaultUSDCBlock = await getLatestBlock()
+      const vaultUSDCHex = await provider.request({
+        method: 'eth_call',
+        params: [{
+          to: USDC_SEPOLIA,
+          data: '0x70a08231000000000000000000000000' + VAULT_ADDRESS.slice(2) // balanceOf(VAULT_ADDRESS)
+        }, vaultUSDCBlock]
+      })
+      const vaultUSDCWei = parseInt(vaultUSDCHex, 16)
+      const vaultUSDC = vaultUSDCWei / 1e6
+      setVaultUSDCBalance(vaultUSDC.toFixed(6))
+      log(`💰 Vault Total USDC: ${vaultUSDC.toFixed(6)} USDC`)
 
       setStatus('Vault balances loaded')
     } catch (error: any) {
@@ -991,7 +1006,12 @@ export default function Home() {
                 {/* Market Simulator Control */}
                 <div className="p-4 bg-white rounded-lg border">
                   <h3 className="font-semibold mb-2">📊 Market Simulator</h3>
-                  <p className="text-xs text-gray-600 mb-3">Simulates profits/losses every 60s</p>
+                  <p className="text-xs text-gray-600 mb-3">Geometric Brownian Motion with exponential timing</p>
+                  <div className="text-xs text-gray-500 mb-3 space-y-1">
+                    <p>• Target APY: 10%</p>
+                    <p>• Avg Interval: 15 min</p>
+                    <p>• Volatility: 80%</p>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={async () => {
@@ -1241,14 +1261,18 @@ export default function Home() {
             {connected && usdcBalance ? (
               <div className="space-y-6">
                 {/* Balances */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="p-4 bg-white rounded-lg shadow">
-                    <p className="text-sm text-gray-600">USDC Balance</p>
+                    <p className="text-sm text-gray-600">Your USDC</p>
                     <p className="text-2xl font-bold text-blue-600">{usdcBalance}</p>
                   </div>
                   <div className="p-4 bg-white rounded-lg shadow">
-                    <p className="text-sm text-gray-600">Vault Shares</p>
+                    <p className="text-sm text-gray-600">Your Shares</p>
                     <p className="text-2xl font-bold text-green-600">{vaultShares || '0.000000'}</p>
+                  </div>
+                  <div className="p-4 bg-white rounded-lg shadow">
+                    <p className="text-sm text-gray-600">💰 Vault Total USDC</p>
+                    <p className="text-2xl font-bold text-purple-600">{vaultUSDCBalance || '0.000000'}</p>
                   </div>
                 </div>
 

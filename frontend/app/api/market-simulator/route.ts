@@ -18,14 +18,36 @@ let wallet: ethers.Wallet | null = null
 let vault: ethers.Contract | null = null
 let usdc: ethers.Contract | null = null
 
-// Configuration
+// Configuration - Geometric Brownian Motion Parameters
 const VAULT_ADDRESS = process.env.ASYNCVAULT_ADDRESS || process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS
 const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Sepolia USDC
 const RPC_URL = process.env.ETHEREUM_SEPOLIA_RPC
 const SIMULATOR_PRIVATE_KEY = process.env.SIMULATOR_PRIVATE_KEY
-const SIM_INTERVAL_MS = 60000 // 1 minute (for demo, production would be longer)
-const MIN_AMOUNT_USDC = 0.01 // Minimum profit/loss amount
-const MAX_AMOUNT_USDC = 0.5 // Maximum profit/loss amount
+
+// Geometric Brownian Motion Configuration
+let TARGET_APY = 0.10 // 10% annualized return
+let MEAN_INTERVAL_MINUTES = 15 // Average 15 minutes between events
+let VOLATILITY = 0.80 // 80% relative standard deviation
+
+const EVENTS_PER_YEAR = () => 525600 / MEAN_INTERVAL_MINUTES // ~35,040 for 15min
+const SIM_INTERVAL_MS = 60000 // Base polling interval (actual timing uses exponential distribution)
+
+// Helper: Box-Muller transform for Gaussian random numbers
+function gaussianRandom(mean: number, stdDev: number): number {
+  const u1 = Math.random()
+  const u2 = Math.random()
+  const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2)
+  return z0 * stdDev + mean
+}
+
+// Helper: Exponential distribution for timing (memoryless property)
+function exponentialRandom(mean: number): number {
+  const u = Math.random()
+  return -mean * Math.log(1 - u)
+}
+
+// Track next event time
+let nextEventTime: number | null = null
 
 // Validate environment variables
 function validateEnv() {
@@ -82,38 +104,83 @@ async function initializeSimulator() {
   }
 }
 
-// Simulate market event (profit or loss)
+// Simulate market event using Geometric Brownian Motion
 async function simulateMarket() {
   if (!vault || !usdc || !wallet) return
   
   try {
-    const random = Math.random()
-    const isProfit = random > 0.5
+    // Get current vault balance
+    const totalAssetsRaw = await vault.totalAssets()
+    const totalAssets = Number(ethers.formatUnits(totalAssetsRaw, 6))
     
-    // Random amount between MIN and MAX
-    const amount = (MIN_AMOUNT_USDC + Math.random() * (MAX_AMOUNT_USDC - MIN_AMOUNT_USDC)).toFixed(2)
-    const amountWei = ethers.parseUnits(amount, 6)
+    // Handle zero balance edge case
+    if (totalAssets === 0) {
+      console.log('[Market Simulator] ⚠️  Vault balance is 0, skipping simulation')
+      return
+    }
+    
+    // Calculate relative profit using geometric Brownian motion
+    const relProfitMean = TARGET_APY / EVENTS_PER_YEAR()
+    const relProfitStdDev = relProfitMean * VOLATILITY
+    const relProfit = gaussianRandom(relProfitMean, relProfitStdDev)
+    
+    // Calculate new balance and delta
+    const newBalance = totalAssets * (1 + relProfit)
+    let deltaUSDC = newBalance - totalAssets
+    
+    // NOTE: We removed totalReserved tracking after switching to Centrifuge pattern
+    // The vault's ERC4626 implementation automatically handles reserve protection
+    // via previewRedeem() and convertToAssets() during claim operations
+    // 
+    // We still cap losses to avoid trying to withdraw more than vault has:
+    if (deltaUSDC < 0) {
+      // Cap loss to current vault balance (can't go negative)
+      deltaUSDC = Math.max(deltaUSDC, -totalAssets)
+    }
+    
+    // Skip if delta is too small (less than 0.001 USDC)
+    if (Math.abs(deltaUSDC) < 0.001) {
+      console.log(`[Market Simulator] ⏭️  Delta too small (${deltaUSDC.toFixed(6)} USDC), skipping`)
+      return
+    }
+    
+    const amountWei = ethers.parseUnits(Math.abs(deltaUSDC).toFixed(6), 6)
+    const isProfit = deltaUSDC > 0
     
     if (isProfit) {
       // Realize profit: Transfer USDC from simulator to vault
-      console.log(`[Market Simulator] 📈 Realizing PROFIT: ${amount} USDC`)
+      console.log(`[Market Simulator] 📈 PROFIT: ${Math.abs(deltaUSDC).toFixed(6)} USDC (+${(relProfit * 100).toFixed(4)}%)`)
       
       // Check simulator balance
       const balance = await usdc.balanceOf(wallet.address)
       if (balance < amountWei) {
-        console.warn(`[Market Simulator] ⚠️  Insufficient USDC for profit (need ${amount}, have ${ethers.formatUnits(balance, 6)})`)
+        console.warn(`[Market Simulator] ⚠️  Insufficient USDC for profit (need ${Math.abs(deltaUSDC).toFixed(6)}, have ${ethers.formatUnits(balance, 6)})`)
         return
       }
       
-      const tx = await usdc.transfer(VAULT_ADDRESS, amountWei, { gasLimit: 100000 })
-      const receipt = await tx.wait()
+      // Step 1: Transfer USDC to vault
+      const transferTx = await usdc.transfer(VAULT_ADDRESS, amountWei, { gasLimit: 100000 })
+      const transferReceipt = await transferTx.wait()
       
-      if (receipt.status === 1) {
-        console.log(`[Market Simulator] ✅ Profit realized: ${amount} USDC transferred to vault`)
+      if (transferReceipt.status === 1) {
+        console.log(`[Market Simulator] ✅ USDC transferred to vault: ${Math.abs(deltaUSDC).toFixed(6)} USDC`)
+        
+        // Step 2: Call realizeProfit() to emit event for tracking
+        try {
+          const profitTx = await vault.realizeProfit(USDC_ADDRESS, amountWei, { gasLimit: 100000 })
+          const profitReceipt = await profitTx.wait()
+          
+          if (profitReceipt.status === 1) {
+            console.log(`[Market Simulator] ✅ Profit event emitted on-chain`)
+          }
+        } catch (error: any) {
+          console.warn(`[Market Simulator] ⚠️  Event emission failed (profit still applied): ${error.message}`)
+        }
       }
     } else {
       // Realize loss: Transfer USDC from vault to simulator
-      console.log(`[Market Simulator] 📉 Realizing LOSS: ${amount} USDC`)
+      console.log(`[Market Simulator] 📉 LOSS: ${Math.abs(deltaUSDC).toFixed(6)} USDC (${(relProfit * 100).toFixed(4)}%)`)
+      console.log(`[Market Simulator] 💰 Vault balance before: ${totalAssets.toFixed(6)} USDC`)
       
       // Call realizeLoss on vault (only owner can call this)
       try {
@@ -121,7 +188,7 @@ async function simulateMarket() {
         const receipt = await tx.wait()
         
         if (receipt.status === 1) {
-          console.log(`[Market Simulator] ✅ Loss realized: ${amount} USDC withdrawn from vault`)
+          console.log(`[Market Simulator] ✅ Loss realized: ${Math.abs(deltaUSDC).toFixed(6)} USDC withdrawn from vault`)
         }
       } catch (error: any) {
         if (error.message?.includes('Insufficient unreserved assets')) {
@@ -132,14 +199,20 @@ async function simulateMarket() {
       }
     }
     
-    // Log vault state
-    const totalAssets = await vault.totalAssets()
+    // Log vault state after event
+    const newTotalAssets = await vault.totalAssets()
     const totalSupply = await vault.totalSupply()
     const sharePrice = totalSupply > 0n 
-      ? (Number(totalAssets) / Number(totalSupply)).toFixed(6)
+      ? (Number(newTotalAssets) / Number(totalSupply)).toFixed(6)
       : '1.000000'
     
-    console.log(`[Market Simulator] 💰 Vault: ${ethers.formatUnits(totalAssets, 6)} USDC | Share price: ${sharePrice}`)
+    console.log(`[Market Simulator] 💰 Vault: ${ethers.formatUnits(newTotalAssets, 6)} USDC | Share price: ${sharePrice}`)
+    
+    // Schedule next event using exponential distribution
+    const nextIntervalMinutes = exponentialRandom(MEAN_INTERVAL_MINUTES)
+    nextEventTime = Date.now() + (nextIntervalMinutes * 60 * 1000)
+    console.log(`[Market Simulator] ⏰ Next event in ${nextIntervalMinutes.toFixed(1)} minutes`)
+    
   } catch (error) {
     console.error('[Market Simulator] Error simulating market:', error)
   }
@@ -150,12 +223,21 @@ function startSimLoop() {
   if (simInterval) return
   
   console.log('[Market Simulator] Starting simulation loop...')
-  console.log(`[Market Simulator] Frequency: Every ${SIM_INTERVAL_MS / 1000}s`)
-  console.log(`[Market Simulator] Amount range: ${MIN_AMOUNT_USDC} - ${MAX_AMOUNT_USDC} USDC`)
+  console.log(`[Market Simulator] Model: Geometric Brownian Motion`)
+  console.log(`[Market Simulator] Target APY: ${(TARGET_APY * 100).toFixed(1)}%`)
+  console.log(`[Market Simulator] Mean Interval: ${MEAN_INTERVAL_MINUTES} minutes`)
+  console.log(`[Market Simulator] Volatility: ${(VOLATILITY * 100).toFixed(0)}%`)
+  console.log(`[Market Simulator] Events/Year: ~${EVENTS_PER_YEAR().toFixed(0)}`)
+  
+  // Initialize next event time
+  nextEventTime = Date.now()
   
   simInterval = setInterval(async () => {
-    await simulateMarket()
-  }, SIM_INTERVAL_MS)
+    // Check if it's time for the next event
+    if (nextEventTime && Date.now() >= nextEventTime) {
+      await simulateMarket()
+    }
+  }, SIM_INTERVAL_MS) // Check every minute
   
   // Run immediately on start
   simulateMarket()
@@ -166,6 +248,7 @@ function stopSimLoop() {
   if (simInterval) {
     clearInterval(simInterval)
     simInterval = null
+    nextEventTime = null
     console.log('[Market Simulator] Stopped simulation loop')
   }
 }
@@ -242,6 +325,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   let balance = 'Not initialized'
+  let vaultBalance = 'Not initialized'
+  let nextEventIn = null
   
   if (usdc && wallet) {
     try {
@@ -252,13 +337,88 @@ export async function GET() {
     }
   }
   
+  if (vault) {
+    try {
+      const assets = await vault.totalAssets()
+      vaultBalance = ethers.formatUnits(assets, 6) + ' USDC'
+    } catch (error) {
+      vaultBalance = 'Error fetching balance'
+    }
+  }
+  
+  if (nextEventTime && simRunning) {
+    const remaining = Math.max(0, nextEventTime - Date.now())
+    nextEventIn = `${(remaining / 60000).toFixed(1)} minutes`
+  }
+  
   return NextResponse.json({
     running: simRunning,
     vault: VAULT_ADDRESS,
     simulator: wallet?.address || 'Not initialized',
-    balance,
-    interval: `${SIM_INTERVAL_MS / 1000}s`,
-    amountRange: `${MIN_AMOUNT_USDC} - ${MAX_AMOUNT_USDC} USDC`
+    simulatorBalance: balance,
+    vaultBalance,
+    config: {
+      targetAPY: `${(TARGET_APY * 100).toFixed(1)}%`,
+      meanIntervalMinutes: MEAN_INTERVAL_MINUTES,
+      volatility: `${(VOLATILITY * 100).toFixed(0)}%`,
+      eventsPerYear: EVENTS_PER_YEAR().toFixed(0)
+    },
+    nextEventIn
   })
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const { targetAPY, meanIntervalMinutes, volatility } = await request.json()
+    
+    // Validate inputs
+    if (targetAPY !== undefined) {
+      if (typeof targetAPY !== 'number' || targetAPY < 0 || targetAPY > 1) {
+        return NextResponse.json({
+          error: 'targetAPY must be a number between 0 and 1 (e.g., 0.10 for 10%)'
+        }, { status: 400 })
+      }
+      TARGET_APY = targetAPY
+    }
+    
+    if (meanIntervalMinutes !== undefined) {
+      if (typeof meanIntervalMinutes !== 'number' || meanIntervalMinutes <= 0) {
+        return NextResponse.json({
+          error: 'meanIntervalMinutes must be a positive number'
+        }, { status: 400 })
+      }
+      MEAN_INTERVAL_MINUTES = meanIntervalMinutes
+    }
+    
+    if (volatility !== undefined) {
+      if (typeof volatility !== 'number' || volatility < 0) {
+        return NextResponse.json({
+          error: 'volatility must be a non-negative number (e.g., 0.80 for 80%)'
+        }, { status: 400 })
+      }
+      VOLATILITY = volatility
+    }
+    
+    console.log('[Market Simulator] Configuration updated:')
+    console.log(`  Target APY: ${(TARGET_APY * 100).toFixed(1)}%`)
+    console.log(`  Mean Interval: ${MEAN_INTERVAL_MINUTES} minutes`)
+    console.log(`  Volatility: ${(VOLATILITY * 100).toFixed(0)}%`)
+    
+    return NextResponse.json({
+      status: 'updated',
+      config: {
+        targetAPY: TARGET_APY,
+        meanIntervalMinutes: MEAN_INTERVAL_MINUTES,
+        volatility: VOLATILITY,
+        eventsPerYear: EVENTS_PER_YEAR()
+      }
+    })
+    
+  } catch (error: any) {
+    console.error('[Market Simulator Config] Error:', error)
+    return NextResponse.json({
+      error: error.message || 'Internal server error'
+    }, { status: 500 })
+  }
 }
 
