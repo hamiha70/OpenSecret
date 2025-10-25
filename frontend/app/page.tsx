@@ -19,7 +19,7 @@ export default function Home() {
   const [operatorBotEnabled, setOperatorBotEnabled] = useState(false)
   
   // Progress tracking for better UX
-  const [depositProgress, setDepositProgress] = useState<'idle' | 'approving' | 'requesting' | 'waiting_claim' | 'claiming' | 'success'>('idle')
+  const [depositProgress, setDepositProgress] = useState<'idle' | 'checking' | 'approving' | 'requesting' | 'waiting_claim' | 'claiming' | 'success'>('idle')
   const [redeemProgress, setRedeemProgress] = useState<'idle' | 'requesting' | 'waiting_claim' | 'claiming' | 'success'>('idle')
   
   // Use useRef instead of useState to avoid closure issues in setInterval
@@ -313,33 +313,55 @@ export default function Home() {
 
   const depositToVault = async (amount: string) => {
     try {
-      setDepositProgress('approving')
+      setDepositProgress('checking')
       log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       log('💰 STARTING VAULT DEPOSIT')
       log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      setStatus('Approving USDC...')
+      setStatus('Checking approval...')
 
       let provider = window.ethereum
       if (window.ethereum?.providers) {
         provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
       }
 
-      const amountWei = Math.floor(parseFloat(amount) * 1e6).toString(16).padStart(64, '0')
+      const amountWei = Math.floor(parseFloat(amount) * 1e6)
+      const amountHex = amountWei.toString(16).padStart(64, '0')
 
-      // Step 1: Approve USDC
-      log('1️⃣ Approving USDC...')
-      const approvalTx = await provider.request({
-        method: 'eth_sendTransaction',
+      // Step 1: Check if approval is needed
+      log('1️⃣ Checking USDC approval...')
+      const allowanceHex = await provider.request({
+        method: 'eth_call',
         params: [{
-          from: address,
           to: USDC_SEPOLIA,
-          data: '0x095ea7b3' + VAULT_ADDRESS.slice(2).padStart(64, '0') + amountWei // approve(address,uint256)
-        }]
+          data: '0xdd62ed3e' + // allowance(address,address)
+                address.slice(2).padStart(64, '0') + // owner
+                VAULT_ADDRESS.slice(2).padStart(64, '0') // spender
+        }, 'latest']
       })
-      log(`✅ Approval tx: ${approvalTx}`)
-      log('⏳ Waiting for confirmation...')
-      setStatus('Waiting for approval confirmation...')
-      await waitForTransaction(provider, approvalTx)
+      const currentAllowance = parseInt(allowanceHex, 16)
+      log(`   Current allowance: ${(currentAllowance / 1e6).toFixed(2)} USDC`)
+
+      if (currentAllowance < amountWei) {
+        setDepositProgress('approving')
+        log('⚠️  Insufficient approval - requesting approval...')
+        log('💡 Tip: Use "Approve USDC" button above for one-time unlimited approval!')
+        setStatus('Approving USDC...')
+        
+        const approvalTx = await provider.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: address,
+            to: USDC_SEPOLIA,
+            data: '0x095ea7b3' + VAULT_ADDRESS.slice(2).padStart(64, '0') + amountHex // approve(address,uint256)
+          }]
+        })
+        log(`✅ Approval tx: ${approvalTx}`)
+        log('⏳ Waiting for confirmation...')
+        setStatus('Waiting for approval confirmation...')
+        await waitForTransaction(provider, approvalTx)
+      } else {
+        log('✅ Sufficient approval already exists - skipping approval step!')
+      }
       
       // Step 2: Request deposit
       setDepositProgress('requesting')
@@ -765,10 +787,13 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold mb-2">🤖 Operator Bot Mode</h2>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 mb-2">
                     {operatorBotEnabled 
                       ? 'Bot will automatically claim deposits/redeems (no MetaMask popups)'
                       : 'You will approve each claim transaction in MetaMask'}
+                  </p>
+                  <p className="text-xs text-gray-500 italic">
+                    Note: Bot mode applies to all users. In production, this would be per-user preference.
                   </p>
                 </div>
                 <button
@@ -1003,6 +1028,7 @@ export default function Home() {
                       className="w-full bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold"
                     >
                       {depositProgress === 'idle' && '💰 Deposit to Vault'}
+                      {depositProgress === 'checking' && '🔍 Checking Approval...'}
                       {depositProgress === 'approving' && '⏳ Approving USDC...'}
                       {depositProgress === 'requesting' && '⏳ Requesting Deposit...'}
                       {depositProgress === 'waiting_claim' && '⏳ Waiting for Claim...'}
@@ -1012,6 +1038,7 @@ export default function Home() {
                     {depositProgress !== 'idle' && (
                       <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-sm">
                         <p className="font-semibold text-blue-900">
+                          {depositProgress === 'checking' && '1/3: Checking approval...'}
                           {depositProgress === 'approving' && '1/3: Approving USDC...'}
                           {depositProgress === 'requesting' && '2/3: Requesting deposit...'}
                           {depositProgress === 'waiting_claim' && `3/3: ${operatorBotEnabled ? 'Bot will claim automatically' : 'Waiting for your claim approval'}`}
