@@ -1,19 +1,28 @@
 # AsyncVault Deployment
 
-## Deployment Details
+## Current Deployment (v4 - Production Ready)
 
 **Network:** Ethereum Sepolia (Chain ID: 11155111)
-**Contract:** AsyncVault (with full operator pattern + auto-claim functions)
-**Address:** `0x8A73589fe295A64e9085708636cb04a29c9c4461`
-**Verification:** ⏳ Pending Blockscout verification
+**Contract:** AsyncVault (ERC4626 + Centrifuge pattern + Operator)
+**Address:** `0x065EB36e5d33c35fd8C510fF2f42C41D2b3FdAf9`
+**Verification:** ✅ Verified on Blockscout
+
+### Features
+- ✅ Inherits from OpenZeppelin ERC4626
+- ✅ Centrifuge pattern (assets calculated at claim time)
+- ✅ Operator pattern for automated claiming
+- ✅ User self-claim and operator claim both supported
+- ✅ Profit/loss simulation via simulator role
+- ✅ 23 comprehensive fork tests passing
 
 ### Blockscout Links
-- **Contract:** https://eth-sepolia.blockscout.com/address/0x8A73589fe295A64e9085708636cb04a29c9c4461
+- **Contract:** https://eth-sepolia.blockscout.com/address/0x065EB36e5d33c35fd8C510fF2f42C41D2b3FdAf9
 - **USDC (Asset):** https://eth-sepolia.blockscout.com/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
 
 ### Previous Deployments
-- v2 (with operator pattern, missing For functions): `0x671E0EF681F18Bd0A0bD4122A3b06966e0013E10` (deprecated)
-- v1 (without operator): `0x31144B67A0003f88a53c011625DCC28713CeB9AB` (deprecated)
+- v3 (pre-Centrifuge): `0x8A73589fe295A64e9085708636cb04a29c9c4461` (deprecated)
+- v2 (missing For functions): `0x671E0EF681F18Bd0A0bD4122A3b06966e0013E10` (deprecated)
+- v1 (no operator): `0x31144B67A0003f88a53c011625DCC28713CeB9AB` (deprecated)
 
 ## Contract Configuration
 
@@ -116,3 +125,34 @@ forge verify-contract \
   --watch
 ```
 
+
+## Configuration Management
+
+### Single Source of Truth
+The vault address is now managed via environment variables in `.env`:
+
+```bash
+# AsyncVault Contract Address (update after each deployment)
+ASYNCVAULT_ADDRESS=0x065EB36e5d33c35fd8C510fF2f42C41D2b3FdAf9
+NEXT_PUBLIC_ASYNCVAULT_ADDRESS=0x065EB36e5d33c35fd8C510fF2f42C41D2b3FdAf9
+```
+
+**Benefits:**
+- ✅ One place to update (just `.env`)
+- ✅ All services automatically pick up new address
+- ✅ Easy to switch between deployments for testing
+- ✅ Fallback values in code for safety
+
+**What uses the env var:**
+- Frontend: `NEXT_PUBLIC_ASYNCVAULT_ADDRESS`
+- Operator Bot: `ASYNCVAULT_ADDRESS`
+- Manual Scripts: `ASYNCVAULT_ADDRESS`
+
+### After Each Deployment
+1. Deploy contract
+2. Verify on Blockscout
+3. Update `.env` with new address
+4. Restart services (frontend, operator bot)
+5. Test!
+
+No code changes needed! 🚀

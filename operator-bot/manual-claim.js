@@ -17,10 +17,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(__dirname, '../.env') })
 dotenv.config({ path: join(__dirname, '../contracts-foundry/.env') })
 
-// Configuration
-const VAULT_ADDRESS = '0x8A73589fe295A64e9085708636cb04a29c9c4461'
+// Configuration (FAIL FAST if missing)
+const VAULT_ADDRESS = process.env.ASYNCVAULT_ADDRESS
 const RPC_URL = process.env.ETHEREUM_SEPOLIA_RPC
 const OPERATOR_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY
+
+// Validate required environment variables
+if (!VAULT_ADDRESS) {
+  console.error('❌ ERROR: ASYNCVAULT_ADDRESS not set in .env')
+  console.error('   Please add: ASYNCVAULT_ADDRESS=0x...')
+  process.exit(1)
+}
+if (!RPC_URL || !OPERATOR_PRIVATE_KEY) {
+  console.error('❌ ERROR: Missing required environment variables in .env')
+  process.exit(1)
+}
 
 // Get user address from command line
 const USER_ADDRESS = process.argv[2]

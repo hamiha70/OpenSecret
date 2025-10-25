@@ -2,10 +2,18 @@
  * Contract addresses and configuration
  */
 
+// Validate required environment variable (FAIL FAST)
+if (!process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS) {
+  throw new Error(
+    'NEXT_PUBLIC_ASYNCVAULT_ADDRESS is not set in .env\n' +
+    'Please add: NEXT_PUBLIC_ASYNCVAULT_ADDRESS=0x...'
+  )
+}
+
 export const CONTRACTS = {
-  // AsyncVault deployed on Ethereum Sepolia (with operator pattern)
+  // AsyncVault deployed on Ethereum Sepolia (ERC4626 + Centrifuge pattern + operator)
   vault: {
-    address: '0x8A73589fe295A64e9085708636cb04a29c9c4461' as const,
+    address: process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS as `0x${string}`,
     chainId: 11155111, // Sepolia
   },
   

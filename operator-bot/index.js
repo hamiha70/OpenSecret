@@ -28,13 +28,28 @@ function logError(message, error = null) {
 dotenv.config({ path: join(__dirname, '../.env') })
 dotenv.config({ path: join(__dirname, '../contracts-foundry/.env') })
 
-// Configuration
-const VAULT_ADDRESS = '0x8A73589fe295A64e9085708636cb04a29c9c4461'
+// Configuration (from environment variables - FAIL FAST if missing)
+const VAULT_ADDRESS = process.env.ASYNCVAULT_ADDRESS
 const RPC_URL = process.env.ETHEREUM_SEPOLIA_RPC
 const OPERATOR_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY // Deployer is also operator
 const POLL_INTERVAL_MS = 5000 // Poll every 5 seconds
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 2000
+
+// Validate required environment variables
+if (!VAULT_ADDRESS) {
+  console.error('❌ ERROR: ASYNCVAULT_ADDRESS not set in .env')
+  console.error('   Please add: ASYNCVAULT_ADDRESS=0x...')
+  process.exit(1)
+}
+if (!RPC_URL) {
+  console.error('❌ ERROR: ETHEREUM_SEPOLIA_RPC not set in .env')
+  process.exit(1)
+}
+if (!OPERATOR_PRIVATE_KEY) {
+  console.error('❌ ERROR: DEPLOYER_PRIVATE_KEY not set in .env')
+  process.exit(1)
+}
 
 // Load ABI
 const vaultABI = JSON.parse(
