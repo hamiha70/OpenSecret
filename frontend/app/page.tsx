@@ -18,6 +18,10 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([])
   const [operatorBotEnabled, setOperatorBotEnabled] = useState(false)
   
+  // Progress tracking for better UX
+  const [depositProgress, setDepositProgress] = useState<'idle' | 'approving' | 'requesting' | 'waiting_claim' | 'claiming' | 'success'>('idle')
+  const [redeemProgress, setRedeemProgress] = useState<'idle' | 'requesting' | 'waiting_claim' | 'claiming' | 'success'>('idle')
+  
   // Use useRef instead of useState to avoid closure issues in setInterval
   const isClaimingDepositRef = useRef(false)
   const isClaimingRedeemRef = useRef(false)
@@ -309,10 +313,11 @@ export default function Home() {
 
   const depositToVault = async (amount: string) => {
     try {
+      setDepositProgress('approving')
       log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       log('💰 STARTING VAULT DEPOSIT')
       log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      setStatus('Depositing to vault...')
+      setStatus('Approving USDC...')
 
       let provider = window.ethereum
       if (window.ethereum?.providers) {
@@ -333,9 +338,12 @@ export default function Home() {
       })
       log(`✅ Approval tx: ${approvalTx}`)
       log('⏳ Waiting for confirmation...')
+      setStatus('Waiting for approval confirmation...')
       await waitForTransaction(provider, approvalTx)
       
       // Step 2: Request deposit
+      setDepositProgress('requesting')
+      setStatus('Requesting deposit...')
       log('2️⃣ Requesting deposit...')
       const depositTx = await provider.request({
         method: 'eth_sendTransaction',
@@ -348,8 +356,10 @@ export default function Home() {
       })
       log(`✅ Deposit request tx: ${depositTx}`)
       log('⏳ Waiting for confirmation...')
+      setStatus('Waiting for deposit request confirmation...')
       await waitForTransaction(provider, depositTx)
       
+      setDepositProgress('waiting_claim')
       log('✅ Deposit requested successfully!')
       log('')
       log('⚠️  NOTE: ERC-7540 requires 2-step flow:')
@@ -357,11 +367,49 @@ export default function Home() {
       log('   2. Claim shares (⏳ next)')
       log('')
       
+      // Clear input field
+      const input = document.getElementById('depositAmount') as HTMLInputElement
+      if (input) input.value = ''
+      
       if (operatorBotEnabled) {
         log('🤖 Operator bot mode ENABLED - bot will auto-claim for you')
         log('   (No MetaMask popup needed for claim)')
-        setStatus('⏳ Deposit pending - operator bot will claim automatically')
+        log('   Frontend will NOT attempt to claim (bot handles it)')
+        setStatus('⏳ Waiting for bot to claim shares...')
+        
+        // Poll for completion (bot will claim in background)
+        const pollInterval = setInterval(async () => {
+          await checkVaultBalances()
+          const depositHex = await (window.ethereum as any).request({
+            method: 'eth_call',
+            params: [{
+              to: VAULT_ADDRESS,
+              data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address)
+            }, 'latest']
+          })
+          const pendingDepositAssets = parseInt(depositHex, 16) / 1e6
+          
+          if (pendingDepositAssets === 0) {
+            setDepositProgress('success')
+            log('✅ Bot claimed successfully!')
+            setStatus('✅ Deposit complete!')
+            clearInterval(pollInterval)
+            await checkUSDC()
+            setTimeout(() => setDepositProgress('idle'), 3000)
+          }
+        }, 3000) // Poll every 3 seconds
+        
+        // Timeout after 60 seconds
+        setTimeout(() => {
+          clearInterval(pollInterval)
+          if (depositProgress === 'waiting_claim') {
+            setDepositProgress('idle')
+            log('⚠️ Bot claim timeout - please check manually')
+          }
+        }, 60000)
+        // DO NOT call pollAndClaimDeposit() - let the bot handle it!
       } else {
+        setDepositProgress('claiming')
         log('👤 Self-claim mode - you will need to approve claim transaction')
         log('🔄 Starting auto-claim polling...')
         setStatus('⏳ Deposit pending - please approve CLAIM transaction when it appears')
@@ -370,6 +418,7 @@ export default function Home() {
       }
 
     } catch (error: any) {
+      setDepositProgress('idle')
       log(`❌ Deposit error: ${error.message}`)
       setStatus(`Deposit failed: ${error.message}`)
     }
@@ -417,16 +466,20 @@ export default function Home() {
             log(`✅ Claim tx: ${claimTx}`)
             await waitForTransaction(provider, claimTx)
             
+            setDepositProgress('success')
             log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
             log('🎉 DEPOSIT COMPLETE! Shares minted!')
             log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-            setStatus('Deposit complete!')
+            setStatus('✅ Deposit complete!')
             clearInterval(interval)
             isClaimingDepositRef.current = false // 🔓 Unlock
             
             // Refresh balances
             await checkUSDC()
             await checkVaultBalances()
+            
+            // Reset progress after 3 seconds
+            setTimeout(() => setDepositProgress('idle'), 3000)
           } catch (claimError: any) {
             log(`❌ Claim failed: ${claimError.message}`)
             isClaimingDepositRef.current = false // 🔓 Unlock on error
@@ -448,10 +501,11 @@ export default function Home() {
 
   const redeemFromVault = async (shares: string) => {
     try {
+      setRedeemProgress('requesting')
       log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       log('💸 STARTING VAULT REDEEM')
       log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      setStatus('Redeeming from vault...')
+      setStatus('Requesting redeem...')
 
       let provider = window.ethereum
       if (window.ethereum?.providers) {
@@ -473,8 +527,10 @@ export default function Home() {
       })
       log(`✅ Redeem request tx: ${redeemTx}`)
       log('⏳ Waiting for confirmation...')
+      setStatus('Waiting for redeem request confirmation...')
       await waitForTransaction(provider, redeemTx)
       
+      setRedeemProgress('waiting_claim')
       log('✅ Redeem requested successfully!')
       log('')
       log('⚠️  NOTE: ERC-7540 requires 2-step flow:')
@@ -482,11 +538,47 @@ export default function Home() {
       log('   2. Claim USDC (⏳ next)')
       log('')
       
+      // Clear input field
+      const input = document.getElementById('redeemAmount') as HTMLInputElement
+      if (input) input.value = ''
+      
       if (operatorBotEnabled) {
         log('🤖 Operator bot mode ENABLED - bot will auto-claim for you')
         log('   (No MetaMask popup needed for claim)')
-        setStatus('⏳ Redeem pending - operator bot will claim automatically')
+        setStatus('⏳ Waiting for bot to claim USDC...')
+        
+        // Poll for completion (bot will claim in background)
+        const pollInterval = setInterval(async () => {
+          await checkVaultBalances()
+          const redeemHex = await (window.ethereum as any).request({
+            method: 'eth_call',
+            params: [{
+              to: VAULT_ADDRESS,
+              data: '0xaed27577000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address)
+            }, 'latest']
+          })
+          const pendingRedeemShares = parseInt(redeemHex, 16) / 1e6
+          
+          if (pendingRedeemShares === 0) {
+            setRedeemProgress('success')
+            log('✅ Bot claimed successfully!')
+            setStatus('✅ Redeem complete!')
+            clearInterval(pollInterval)
+            await checkUSDC()
+            setTimeout(() => setRedeemProgress('idle'), 3000)
+          }
+        }, 3000) // Poll every 3 seconds
+        
+        // Timeout after 60 seconds
+        setTimeout(() => {
+          clearInterval(pollInterval)
+          if (redeemProgress === 'waiting_claim') {
+            setRedeemProgress('idle')
+            log('⚠️ Bot claim timeout - please check manually')
+          }
+        }, 60000)
       } else {
+        setRedeemProgress('claiming')
         log('👤 Self-claim mode - you will need to approve claim transaction')
         log('🔄 Starting auto-claim polling...')
         setStatus('⏳ Redeem pending - please approve CLAIM transaction when it appears')
@@ -495,6 +587,7 @@ export default function Home() {
       }
 
     } catch (error: any) {
+      setRedeemProgress('idle')
       log(`❌ Redeem error: ${error.message}`)
       setStatus(`Redeem failed: ${error.message}`)
     }
@@ -542,16 +635,20 @@ export default function Home() {
             log(`✅ Claim tx: ${claimTx}`)
             await waitForTransaction(provider, claimTx)
             
+            setRedeemProgress('success')
             log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
             log('🎉 REDEEM COMPLETE! USDC returned!')
             log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-            setStatus('Redeem complete!')
+            setStatus('✅ Redeem complete!')
             clearInterval(interval)
             isClaimingRedeemRef.current = false // 🔓 Unlock
             
             // Refresh balances
             await checkUSDC()
             await checkVaultBalances()
+            
+            // Reset progress after 3 seconds
+            setTimeout(() => setRedeemProgress('idle'), 3000)
           } catch (claimError: any) {
             log(`❌ Claim failed: ${claimError.message}`)
             isClaimingRedeemRef.current = false // 🔓 Unlock on error
@@ -878,13 +975,36 @@ export default function Home() {
                           depositToVault(input.value)
                         }
                       }}
-                      className="w-full bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 font-semibold"
+                      disabled={depositProgress !== 'idle' || (!!pendingDeposit && parseFloat(pendingDeposit) > 0)}
+                      className="w-full bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold"
                     >
-                      💰 Deposit to Vault
+                      {depositProgress === 'idle' && '💰 Deposit to Vault'}
+                      {depositProgress === 'approving' && '⏳ Approving USDC...'}
+                      {depositProgress === 'requesting' && '⏳ Requesting Deposit...'}
+                      {depositProgress === 'waiting_claim' && '⏳ Waiting for Claim...'}
+                      {depositProgress === 'claiming' && '⏳ Claiming Shares...'}
+                      {depositProgress === 'success' && '✅ Deposit Complete!'}
                     </button>
-                    <p className="text-xs text-gray-500">
-                      Note: This will approve USDC, request deposit, and auto-claim shares
-                    </p>
+                    {depositProgress !== 'idle' && (
+                      <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-sm">
+                        <p className="font-semibold text-blue-900">
+                          {depositProgress === 'approving' && '1/3: Approving USDC...'}
+                          {depositProgress === 'requesting' && '2/3: Requesting deposit...'}
+                          {depositProgress === 'waiting_claim' && `3/3: ${operatorBotEnabled ? 'Bot will claim automatically' : 'Waiting for your claim approval'}`}
+                          {depositProgress === 'claiming' && '3/3: Claiming shares...'}
+                          {depositProgress === 'success' && '✅ Deposit complete! Shares minted.'}
+                        </p>
+                      </div>
+                    )}
+                    {pendingDeposit && parseFloat(pendingDeposit) > 0 ? (
+                      <p className="text-xs text-amber-600 font-semibold">
+                        ⚠️ Cannot deposit: You have a pending deposit of {pendingDeposit} USDC waiting to be claimed
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500">
+                        Note: This will approve USDC, request deposit, and auto-claim shares
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -914,14 +1034,34 @@ export default function Home() {
                           setStatus('Please enter an amount to redeem')
                         }
                       }}
-                      disabled={!vaultShares || parseFloat(vaultShares) === 0}
+                      disabled={!vaultShares || parseFloat(vaultShares) === 0 || redeemProgress !== 'idle' || (!!pendingRedeem && parseFloat(pendingRedeem) > 0)}
                       className="w-full bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
                     >
-                      💸 Redeem from Vault
+                      {redeemProgress === 'idle' && '💸 Redeem from Vault'}
+                      {redeemProgress === 'requesting' && '⏳ Requesting Redeem...'}
+                      {redeemProgress === 'waiting_claim' && '⏳ Waiting for Claim...'}
+                      {redeemProgress === 'claiming' && '⏳ Claiming USDC...'}
+                      {redeemProgress === 'success' && '✅ Redeem Complete!'}
                     </button>
-                    <p className="text-xs text-gray-500">
-                      Note: This will request redeem and auto-claim USDC
-                    </p>
+                    {redeemProgress !== 'idle' && (
+                      <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-sm">
+                        <p className="font-semibold text-blue-900">
+                          {redeemProgress === 'requesting' && '1/2: Requesting redeem...'}
+                          {redeemProgress === 'waiting_claim' && `2/2: ${operatorBotEnabled ? 'Bot will claim automatically' : 'Waiting for your claim approval'}`}
+                          {redeemProgress === 'claiming' && '2/2: Claiming USDC...'}
+                          {redeemProgress === 'success' && '✅ Redeem complete! USDC returned.'}
+                        </p>
+                      </div>
+                    )}
+                    {pendingRedeem && parseFloat(pendingRedeem) > 0 ? (
+                      <p className="text-xs text-amber-600 font-semibold">
+                        ⚠️ Cannot redeem: You have a pending redeem of {pendingRedeem} shares waiting to be claimed
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500">
+                        Note: This will request redeem and auto-claim USDC
+                      </p>
+                    )}
                   </div>
                 </div>
 

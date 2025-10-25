@@ -107,10 +107,23 @@ async function getActiveUsers() {
         users.add(owner)
       }
     })
-
+    
+    // Filter out users with no pending claims (already fulfilled)
+    const usersWithPending = []
+    for (const user of users) {
+      const [pendingDeposit, pendingRedeem] = await Promise.all([
+        vault.pendingDepositRequest(user),
+        vault.pendingRedeemRequest(user)
+      ])
+      
+      if (pendingDeposit > 0n || pendingRedeem > 0n) {
+        usersWithPending.push(user)
+      }
+    }
+    
     // Clean one-line output
-    console.log(`[Block ${currentBlock}] 👥 ${users.size} users | 📥 ${depositEvents.length} deposits | 📤 ${redeemEvents.length} redeems`)
-    return Array.from(users)
+    console.log(`[Block ${currentBlock}] 👥 ${usersWithPending.length} pending claims | 📥 ${depositEvents.length} deposits | 📤 ${redeemEvents.length} redeems`)
+    return usersWithPending
   } catch (error) {
     logError('Error scanning for users', error)
     console.log(`[ERROR] Failed to scan - check logs/`)
@@ -194,8 +207,7 @@ async function processRedeemClaim(userAddress, retryCount = 0) {
     processing.add(lockKey)
 
     // Check pending redeem
-    const pendingResult = await vault.pendingRedeemRequest(userAddress)
-    const pendingShares = pendingResult[0] // First return value is shares
+    const pendingShares = await vault.pendingRedeemRequest(userAddress) // Returns uint256 directly, not a tuple
     
     if (pendingShares > 0n) {
       const sharesFormatted = ethers.formatUnits(pendingShares, 6)
@@ -249,11 +261,11 @@ async function pollAndProcess() {
     const users = await getActiveUsers()
     
     if (users.length === 0) {
-      console.log('ℹ️  No users found yet, waiting for activity...')
+      console.log('✅ All claims fulfilled, waiting for new activity...')
       return
     }
 
-    console.log(`🔄 Checking ${users.length} users for pending claims...`)
+    console.log(`🔄 Processing ${users.length} pending claims...`)
 
     // Process all users in parallel
     await Promise.allSettled([

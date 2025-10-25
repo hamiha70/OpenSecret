@@ -156,3 +156,19 @@ NEXT_PUBLIC_ASYNCVAULT_ADDRESS=0x065EB36e5d33c35fd8C510fF2f42C41D2b3FdAf9
 5. Test!
 
 No code changes needed! 🚀
+
+## Frontend Setup (Important!)
+
+Next.js requires environment variables to be in `frontend/.env.local`:
+
+```bash
+cd frontend
+echo "NEXT_PUBLIC_ASYNCVAULT_ADDRESS=0x065EB36e5d33c35fd8C510fF2f42C41D2b3FdAf9" > .env.local
+```
+
+**Why?** Next.js doesn't read from the root `.env` file. It needs its own `.env.local`.
+
+After creating this file, restart the frontend:
+```bash
+npm run dev
+```
