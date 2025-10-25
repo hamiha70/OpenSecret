@@ -960,5 +960,189 @@ contract AsyncVaultForkTest is Test {
         // User should get profit (10 + 5 = 15 USDC)
         assertApproxEqAbs(finalBalance, initialBalance + profit, 1, "Should keep profit");
     }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // PENDING STATE QUERY TESTS (Forked - Real USDC on Sepolia)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    function test_Fork_PendingDepositQuery_BeforeRequest() public {
+        // Query before any request
+        (uint256 assets, uint256 timestamp, bool fulfilled) = vault.pendingDeposits(investor1);
+        
+        assertEq(assets, 0, "No assets pending");
+        assertEq(timestamp, 0, "No timestamp");
+        assertEq(fulfilled, false, "Not fulfilled");
+        
+        console.log("OK - Pending state query works (empty state)");
+    }
+
+    function test_Fork_PendingDepositQuery_AfterRequest() public {
+        uint256 depositAmount = 5 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        // Request deposit
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vm.stopPrank();
+        
+        // Query pending state
+        (uint256 assets, uint256 timestamp, bool fulfilled) = vault.pendingDeposits(investor1);
+        
+        console.log("After requestDeposit:");
+        console.log("  Assets:", assets / USDC_DECIMALS, "USDC");
+        console.log("  Timestamp:", timestamp);
+        console.log("  Fulfilled:", fulfilled);
+        
+        assertEq(assets, depositAmount, "Should have pending assets");
+        assertGt(timestamp, 0, "Should have timestamp");
+        assertEq(fulfilled, false, "Should not be fulfilled yet");
+    }
+
+    function test_Fork_PendingDepositQuery_AfterOperatorClaim() public {
+        uint256 depositAmount = 5 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        // Request deposit
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vm.stopPrank();
+        
+        // Operator claims
+        vm.prank(operator);
+        vault.claimDepositFor(investor1);
+        
+        // Query after claim
+        (uint256 assets, uint256 timestamp, bool fulfilled) = vault.pendingDeposits(investor1);
+        
+        console.log("After claimDepositFor:");
+        console.log("  Assets:", assets / USDC_DECIMALS, "USDC");
+        console.log("  Fulfilled:", fulfilled);
+        
+        assertEq(assets, depositAmount, "Assets still recorded");
+        assertGt(timestamp, 0, "Timestamp still recorded");
+        assertTrue(fulfilled, "Should be fulfilled");
+    }
+
+    function test_Fork_PendingRedeemQuery_AfterRequest() public {
+        uint256 depositAmount = 5 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        // Setup: Deposit and claim
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        
+        uint256 shares = vault.balanceOf(investor1);
+        
+        // Request redeem
+        vault.requestRedeem(shares);
+        vm.stopPrank();
+        
+        // Query pending state
+        (uint256 pendingShares, uint256 timestamp, bool fulfilled) = vault.pendingRedeems(investor1);
+        
+        console.log("After requestRedeem:");
+        console.log("  Shares:", pendingShares / USDC_DECIMALS, "M");
+        console.log("  Timestamp:", timestamp);
+        console.log("  Fulfilled:", fulfilled);
+        
+        assertEq(pendingShares, shares, "Should have pending shares");
+        assertGt(timestamp, 0, "Should have timestamp");
+        assertEq(fulfilled, false, "Should not be fulfilled yet");
+    }
+
+    function test_Fork_PendingQuery_MultipleUsers() public {
+        uint256 amount1 = 3 * USDC_DECIMALS;
+        uint256 amount2 = 2 * USDC_DECIMALS;
+        
+        require(usdc.balanceOf(investor1) >= amount1, "Investor1 needs USDC");
+        deal(SEPOLIA_USDC, investor2, amount2);
+        
+        // Both request deposits
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), amount1);
+        vault.requestDeposit(amount1);
+        vm.stopPrank();
+        
+        vm.startPrank(investor2);
+        usdc.approve(address(vault), amount2);
+        vault.requestDeposit(amount2);
+        vm.stopPrank();
+        
+        // Query both states
+        (uint256 assets1, , bool fulfilled1) = vault.pendingDeposits(investor1);
+        (uint256 assets2, , bool fulfilled2) = vault.pendingDeposits(investor2);
+        
+        console.log("Multi-user pending state:");
+        console.log("  Investor1:", assets1 / USDC_DECIMALS, "USDC, fulfilled:", fulfilled1);
+        console.log("  Investor2:", assets2 / USDC_DECIMALS, "USDC, fulfilled:", fulfilled2);
+        
+        assertEq(assets1, amount1, "Investor1 pending amount");
+        assertEq(assets2, amount2, "Investor2 pending amount");
+        assertEq(fulfilled1, false, "Investor1 not fulfilled");
+        assertEq(fulfilled2, false, "Investor2 not fulfilled");
+        
+        // Operator claims only for investor1
+        vm.prank(operator);
+        vault.claimDepositFor(investor1);
+        
+        // Query again
+        (, , bool fulfilled1After) = vault.pendingDeposits(investor1);
+        (, , bool fulfilled2After) = vault.pendingDeposits(investor2);
+        
+        console.log("After partial claim:");
+        console.log("  Investor1 fulfilled:", fulfilled1After);
+        console.log("  Investor2 fulfilled:", fulfilled2After);
+        
+        assertTrue(fulfilled1After, "Investor1 should be fulfilled");
+        assertEq(fulfilled2After, false, "Investor2 still pending");
+    }
+
+    function test_Fork_BotScenario_DetectPendingAndClaim() public {
+        // This simulates what the operator bot does:
+        // 1. User requests deposit
+        // 2. Bot queries pending state
+        // 3. If not fulfilled, bot claims
+        
+        uint256 depositAmount = 5 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        // User requests deposit
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vm.stopPrank();
+        
+        console.log("BOT: BOT SCENARIO: Detecting pending requests...");
+        
+        // Bot queries pending state (this is what the bot does!)
+        (uint256 assets, , bool fulfilled) = vault.pendingDeposits(investor1);
+        
+        console.log("  Found pending deposit:");
+        console.log("    User:", investor1);
+        console.log("    Amount:", assets / USDC_DECIMALS, "USDC");
+        console.log("    Fulfilled:", fulfilled);
+        
+        // Bot should detect unfulfilled request
+        assertGt(assets, 0, "Bot should detect pending assets");
+        assertEq(fulfilled, false, "Bot should detect unfulfilled");
+        
+        // Bot claims
+        console.log("  Bot claiming...");
+        vm.prank(operator);
+        vault.claimDepositFor(investor1);
+        
+        // Verify claim worked
+        assertEq(vault.balanceOf(investor1), depositAmount, "User should have shares");
+        
+        // Bot queries again - should now be fulfilled
+        (, , bool fulfilledAfter) = vault.pendingDeposits(investor1);
+        assertTrue(fulfilledAfter, "Should be fulfilled after claim");
+        
+        console.log("OK - Bot scenario complete!");
+    }
 }
 

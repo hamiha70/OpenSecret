@@ -1048,5 +1048,147 @@ contract AsyncVaultTest is Test {
         // Verify user got USDC back
         assertEq(usdc.balanceOf(user1), INITIAL_BALANCE, "User got USDC back");
     }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // PENDING STATE QUERY TESTS (Critical for operator bot!)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    function test_PendingDepositRequest_BeforeRequest() public {
+        // Before any request, should return empty struct
+        (uint256 assets, uint256 timestamp, bool fulfilled) = vault.pendingDeposits(user1);
+        
+        assertEq(assets, 0, "No assets pending");
+        assertEq(timestamp, 0, "No timestamp");
+        assertEq(fulfilled, false, "Not fulfilled");
+    }
+
+    function test_PendingDepositRequest_AfterRequest() public {
+        uint256 depositAmount = 100 * 1e6;
+        
+        // Setup: User requests deposit
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vm.stopPrank();
+        
+        // Query pending state
+        (uint256 assets, uint256 timestamp, bool fulfilled) = vault.pendingDeposits(user1);
+        
+        assertEq(assets, depositAmount, "Should have pending assets");
+        assertGt(timestamp, 0, "Should have timestamp");
+        assertEq(fulfilled, false, "Should not be fulfilled yet");
+    }
+
+    function test_PendingDepositRequest_AfterClaim() public {
+        uint256 depositAmount = 100 * 1e6;
+        
+        // Setup: Request and claim
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vm.stopPrank();
+        
+        vm.prank(operator);
+        vault.claimDepositFor(user1);
+        
+        // Query pending state after claim
+        (uint256 assets, uint256 timestamp, bool fulfilled) = vault.pendingDeposits(user1);
+        
+        assertEq(assets, depositAmount, "Assets still recorded");
+        assertGt(timestamp, 0, "Timestamp still recorded");
+        assertTrue(fulfilled, "Should be fulfilled");
+    }
+
+    function test_PendingRedeemRequest_BeforeRequest() public {
+        // Before any request, should return empty struct
+        (uint256 shares, uint256 timestamp, bool fulfilled) = vault.pendingRedeems(user1);
+        
+        assertEq(shares, 0, "No shares pending");
+        assertEq(timestamp, 0, "No timestamp");
+        assertEq(fulfilled, false, "Not fulfilled");
+    }
+
+    function test_PendingRedeemRequest_AfterRequest() public {
+        // Setup: User has shares
+        uint256 depositAmount = 100 * 1e6;
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        
+        uint256 shares = vault.balanceOf(user1);
+        
+        // Request redeem
+        vault.requestRedeem(shares);
+        vm.stopPrank();
+        
+        // Query pending state
+        (uint256 pendingShares, uint256 timestamp, bool fulfilled) = vault.pendingRedeems(user1);
+        
+        assertEq(pendingShares, shares, "Should have pending shares");
+        assertGt(timestamp, 0, "Should have timestamp");
+        assertEq(fulfilled, false, "Should not be fulfilled yet");
+    }
+
+    function test_PendingRedeemRequest_AfterClaim() public {
+        // Setup: User has shares and requests redeem
+        uint256 depositAmount = 100 * 1e6;
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        
+        uint256 shares = vault.balanceOf(user1);
+        vault.requestRedeem(shares);
+        vm.stopPrank();
+        
+        // Operator claims
+        vm.prank(operator);
+        vault.claimRedeemFor(user1);
+        
+        // Query pending state after claim
+        (uint256 pendingShares, uint256 timestamp, bool fulfilled) = vault.pendingRedeems(user1);
+        
+        assertEq(pendingShares, shares, "Shares still recorded");
+        assertGt(timestamp, 0, "Timestamp still recorded");
+        assertTrue(fulfilled, "Should be fulfilled");
+    }
+
+    function test_PendingState_MultipleUsers() public {
+        uint256 amount1 = 100 * 1e6;
+        uint256 amount2 = 200 * 1e6;
+        
+        // User1 requests deposit
+        vm.startPrank(user1);
+        usdc.approve(address(vault), amount1);
+        vault.requestDeposit(amount1);
+        vm.stopPrank();
+        
+        // User2 requests deposit
+        vm.startPrank(user2);
+        usdc.approve(address(vault), amount2);
+        vault.requestDeposit(amount2);
+        vm.stopPrank();
+        
+        // Check both pending states
+        (uint256 assets1, , bool fulfilled1) = vault.pendingDeposits(user1);
+        (uint256 assets2, , bool fulfilled2) = vault.pendingDeposits(user2);
+        
+        assertEq(assets1, amount1, "User1 pending amount");
+        assertEq(assets2, amount2, "User2 pending amount");
+        assertEq(fulfilled1, false, "User1 not fulfilled");
+        assertEq(fulfilled2, false, "User2 not fulfilled");
+        
+        // Claim for user1 only
+        vm.prank(operator);
+        vault.claimDepositFor(user1);
+        
+        // Check states after partial claim
+        (, , bool fulfilled1After) = vault.pendingDeposits(user1);
+        (, , bool fulfilled2After) = vault.pendingDeposits(user2);
+        
+        assertTrue(fulfilled1After, "User1 fulfilled");
+        assertEq(fulfilled2After, false, "User2 still pending");
+    }
 }
 
