@@ -466,9 +466,9 @@ contract AsyncVaultTest is Test {
         // Check state after profit - balance increased automatically!
         assertEq(vault.totalAssets(), depositAmount + profitAmount, "Total assets increased");
         
-        // Share price increased: 1000 shares now worth 1050 USDC
+        // Share price increased: 1000 shares now worth ~1050 USDC (may round down by 1 wei)
         uint256 shareValue = vault.convertToAssets(depositAmount);
-        assertEq(shareValue, depositAmount + profitAmount, "Share price increased");
+        assertApproxEqAbs(shareValue, depositAmount + profitAmount, 1, "Share price increased");
 
         // User redeems and gets profit
         vm.prank(user1);
@@ -477,8 +477,8 @@ contract AsyncVaultTest is Test {
         vm.prank(operator);
         vault.claimRedeemFor(user1);
 
-        // User received profit!
-        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + profitAmount, "User got profit!");
+        // User received profit! (ERC4626 may round down by 1 wei)
+        assertApproxEqAbs(usdc.balanceOf(user1), INITIAL_BALANCE + profitAmount, 1, "User got profit!");
     }
 
     function test_RealizeLoss() public {
@@ -539,13 +539,13 @@ contract AsyncVaultTest is Test {
 
         assertEq(vault.totalAssets(), 1030 * 1e6, "Total after loss (net +3%)");
 
-        // User redeems and gets net profit
+        // User redeems and gets net profit (ERC4626 may round down by 1 wei)
         vm.prank(user1);
         vault.requestRedeem(depositAmount);
         vm.prank(operator);
         vault.claimRedeemFor(user1);
 
-        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 30 * 1e6, "User got net profit");
+        assertApproxEqAbs(usdc.balanceOf(user1), INITIAL_BALANCE + 30 * 1e6, 1, "User got net profit");
     }
 
     function test_RevertIf_RealizeProfitNotSimulator() public {
@@ -624,14 +624,14 @@ contract AsyncVaultTest is Test {
 
         assertEq(vault.totalAssets(), 3300 * 1e6, "Total with profit");
 
-        // User1 redeems (should get proportional profit)
+        // User1 redeems (should get proportional profit, ERC4626 may round down by 1 wei)
         vm.prank(user1);
         vault.requestRedeem(shares1);
         vm.prank(operator);
         vault.claimRedeemFor(user1);
 
-        // User1 deposited 1000, gets 1100 (10% profit)
-        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 100 * 1e6, "User1 got profit");
+        // User1 deposited 1000, gets ~1100 (10% profit, may round down by 1 wei)
+        assertApproxEqAbs(usdc.balanceOf(user1), INITIAL_BALANCE + 100 * 1e6, 1, "User1 got profit");
 
         // User2 redeems
         vm.prank(user2);
@@ -639,8 +639,8 @@ contract AsyncVaultTest is Test {
         vm.prank(operator);
         vault.claimRedeemFor(user2);
 
-        // User2 deposited 2000, gets 2200 (10% profit)
-        assertEq(usdc.balanceOf(user2), INITIAL_BALANCE + 200 * 1e6, "User2 got profit");
+        // User2 deposited 2000, gets ~2200 (10% profit, may round down by 1 wei)
+        assertApproxEqAbs(usdc.balanceOf(user2), INITIAL_BALANCE + 200 * 1e6, 1, "User2 got profit");
     }
 
     function test_SetSimulator() public {
@@ -696,11 +696,11 @@ contract AsyncVaultTest is Test {
         vm.prank(operator);
         vault.claimRedeemFor(user1);
 
-        // User gets CURRENT value (1050 USDC) because calculation happens at claim time!
-        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 50 * 1e6, "User gets current value with profit");
+        // User gets CURRENT value (~1050 USDC, ERC4626 may round down by 1 wei)
+        assertApproxEqAbs(usdc.balanceOf(user1), INITIAL_BALANCE + 50 * 1e6, 1, "User gets current value with profit");
         
-        // Vault is empty
-        assertEq(vault.totalAssets(), 0, "Vault is empty");
+        // Vault is empty (or has 1 wei dust from ERC4626 rounding)
+        assertApproxEqAbs(vault.totalAssets(), 0, 1, "Vault is empty");
     }
 
     function test_LossBetweenRequestAndClaim_UserGetsDynamicValue() public {
@@ -773,11 +773,11 @@ contract AsyncVaultTest is Test {
         vm.prank(operator);
         vault.claimRedeemFor(user1);
 
-        // User1 gets 1050 USDC (their proportional share of profit: 50% of 100 USDC profit = 50 USDC)
-        assertEq(usdc.balanceOf(user1), INITIAL_BALANCE + 50 * 1e6, "User1 gets profit");
+        // User1 gets ~1050 USDC (their proportional share: 50% of 100 USDC profit = 50 USDC, ERC4626 may round down by 1 wei)
+        assertApproxEqAbs(usdc.balanceOf(user1), INITIAL_BALANCE + 50 * 1e6, 1, "User1 gets profit");
         
-        // Vault has 1050 USDC left (user2 still has 1000 shares worth 1050 USDC)
-        assertEq(vault.totalAssets(), 1050 * 1e6, "Vault has assets for user2");
+        // Vault has ~1050 USDC left (user2 still has 1000 shares, may have 1 wei dust from ERC4626 rounding)
+        assertApproxEqAbs(vault.totalAssets(), 1050 * 1e6, 1, "Vault has assets for user2");
         assertEq(vault.balanceOf(user2), 1000 * 1e6, "User2 still has shares");
     }
 

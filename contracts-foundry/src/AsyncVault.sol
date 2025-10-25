@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -10,36 +10,35 @@ import {IProfitLossRealizer} from "./interfaces/IProfitLossRealizer.sol";
 
 /**
  * @title AsyncVault
- * @notice ERC-7540 Asynchronous Vault with Operator Pattern + Profit/Loss Simulation
- * @dev Implements asynchronous deposit/redeem requests with operator auto-claiming
- *      AND IProfitLossRealizer for simulated strategy performance
+ * @notice ERC-7540 Asynchronous Vault extending ERC-4626
+ * @dev Built on OpenZeppelin ERC4626 with async extensions following Centrifuge pattern
+ * 
+ * Standards Compliance:
+ * - ERC-20: Token standard (via ERC4626)
+ * - ERC-4626: Tokenized vault standard (inherited from OpenZeppelin)
+ * - ERC-7540: Async deposit/redeem extensions (our implementation)
  * 
  * Architecture:
- * - Users call requestDeposit/requestRedeem (ERC-7540 async pattern)
- * - Operator (or frontend) calls claimDeposit/claimRedeem to fulfill requests
- * - Market bot calls realizeProfit/realizeLoss to simulate strategy performance
+ * - Inherits ERC4626 for standard vault functions (deposit, withdraw, totalAssets, etc.)
+ * - Extends with ERC-7540 async pattern (requestDeposit/requestRedeem + claim functions)
+ * - Operator pattern for automated claiming (no user interaction needed)
+ * - Market bot simulates profit/loss via IProfitLossRealizer
  * - Integrates with Avail Nexus for cross-chain user onboarding
- * - Single-chain vault on Ethereum Sepolia holding USDC
  * 
  * UX Flow:
  * 1. User bridges USDC via Avail Nexus (from any chain to Sepolia)
  * 2. User calls requestDeposit (1 tx)
- * 3. Frontend polls & operator auto-claims (0 additional user txs)
- * 4. Market bot simulates profit/loss → share price changes
- * 5. User receives shares with dynamic pricing based on performance
+ * 3. Operator bot auto-claims (0 additional user txs)
+ * 4. Market bot simulates profit/loss → share price changes dynamically
+ * 5. User receives shares with current market value (Centrifuge pattern)
  */
-contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
+contract AsyncVault is ERC4626, Ownable, IOperator, IProfitLossRealizer {
     using SafeERC20 for IERC20;
 
     // ═════════════════════════════════════════════════════════════════════════════
-    // STATE VARIABLES
+    // STATE VARIABLES (ERC-7540 Extensions)
     // ═════════════════════════════════════════════════════════════════════════════
-
-    /// @notice The underlying asset (USDC)
-    IERC20 public immutable asset;
-
-    /// @notice Decimals of the underlying asset
-    uint8 private immutable _assetDecimals;
+    // Note: asset, totalAssets(), convertTo*() are inherited from ERC4626
 
     /// @notice Trusted operator who can fulfill requests on behalf of users
     address public operator;
@@ -87,8 +86,8 @@ contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
      * @param _asset The underlying asset (USDC address on Sepolia)
      * @param _operator The trusted operator address
      * @param _simulator The market simulation bot address
-     * @param _name ERC20 token name (e.g., "OmniVault USDC")
-     * @param _symbol ERC20 token symbol (e.g., "ovUSDC")
+     * @param _name ERC20 token name (e.g., "AsyncVault USDC")
+     * @param _symbol ERC20 token symbol (e.g., "asUSDC")
      */
     constructor(
         address _asset,
@@ -96,13 +95,15 @@ contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
         address _simulator,
         string memory _name,
         string memory _symbol
-    ) ERC20(_name, _symbol) Ownable(msg.sender) {
+    ) 
+        ERC4626(IERC20(_asset))  // Pass asset to ERC4626
+        ERC20(_name, _symbol)    // ERC4626 calls ERC20 constructor
+        Ownable(msg.sender) 
+    {
         require(_asset != address(0), "Invalid asset");
         require(_operator != address(0), "Invalid operator");
         require(_simulator != address(0), "Invalid simulator");
 
-        asset = IERC20(_asset);
-        _assetDecimals = ERC20(_asset).decimals();
         operator = _operator;
         simulator = _simulator;
     }
@@ -138,7 +139,7 @@ contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
         require(existing.assets == 0 || existing.fulfilled, "Pending request exists");
 
         // Transfer USDC from user to vault
-        asset.safeTransferFrom(msg.sender, address(this), assets);
+        IERC20(asset()).safeTransferFrom(msg.sender, address(this), assets);
 
         // Record the pending request
         pendingDeposits[msg.sender] = DepositRequest({
@@ -255,7 +256,7 @@ contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
         _burn(user, shares);
 
         // Transfer USDC to user
-        asset.safeTransfer(user, assets);
+        IERC20(asset()).safeTransfer(user, assets);
 
         emit RedeemClaimed(user, shares, assets);
     }
@@ -291,45 +292,18 @@ contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
-    // ERC-4626 COMPATIBILITY (VIEW FUNCTIONS) - Modified for Virtual P&L
+    // ERC-4626 OVERRIDES
     // ═════════════════════════════════════════════════════════════════════════════
+    // Note: totalAssets(), convertToShares(), convertToAssets(), decimals() are inherited from ERC4626
+    // We only override totalAssets() to use our custom implementation
 
     /**
-     * @notice Total assets under management (USDC in vault only - no strategy)
-     * @dev The actual USDC balance already reflects realized profits/losses
-     *      because the simulator transfers actual tokens.
+     * @notice Total assets under management (USDC in vault)
+     * @dev Overrides ERC4626 to use direct balance check
+     *      The actual USDC balance reflects realized profits/losses from simulator
      */
-    function totalAssets() public view returns (uint256) {
-        return asset.balanceOf(address(this));
-    }
-
-    /**
-     * @notice Convert assets to shares (1:1 for MVP, upgradeable to dynamic pricing)
-     */
-    function convertToShares(uint256 assets) public view returns (uint256) {
-        uint256 supply = totalSupply();
-        if (supply == 0) {
-            return assets; // Bootstrap: 1:1
-        }
-        return (assets * supply) / totalAssets();
-    }
-
-    /**
-     * @notice Convert shares to assets
-     */
-    function convertToAssets(uint256 shares) public view returns (uint256) {
-        uint256 supply = totalSupply();
-        if (supply == 0) {
-            return shares; // Bootstrap: 1:1
-        }
-        return (shares * totalAssets()) / supply;
-    }
-
-    /**
-     * @notice Get the decimals of the vault shares (matches asset decimals)
-     */
-    function decimals() public view virtual override returns (uint8) {
-        return _assetDecimals;
+    function totalAssets() public view override returns (uint256) {
+        return IERC20(asset()).balanceOf(address(this));
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -372,7 +346,7 @@ contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
      *      increase from the transfer automatically increases share price!
      */
     function realizeProfit(address token, uint256 amount) external override onlySimulator {
-        require(token == address(asset), "Wrong token");
+        require(token == address(asset()), "Wrong token");
         require(amount > 0, "Zero amount");
 
         // Just emit event - the USDC transfer already happened and balance reflects it!
@@ -388,12 +362,12 @@ contract AsyncVault is ERC20, Ownable, IOperator, IProfitLossRealizer {
      *      CRITICAL: Cannot touch reserved assets!
      */
     function realizeLoss(address token, uint256 amount) external override onlySimulator {
-        require(token == address(asset), "Wrong token");
+        require(token == address(asset()), "Wrong token");
         require(amount > 0, "Zero amount");
         require(amount <= totalAssets(), "Insufficient balance");
 
         // Transfer USDC to simulator (representing loss)
-        asset.safeTransfer(simulator, amount);
+        IERC20(asset()).safeTransfer(simulator, amount);
 
         // Emit event for tracking
         emit LossRealized(token, amount, block.timestamp);
