@@ -449,7 +449,7 @@ export default function Home() {
         params: [{
           from: address,
           to: VAULT_ADDRESS,
-          data: '0x0d1e6667' + amountWei, // requestDeposit(uint256) - FIXED SELECTOR
+          data: '0x0d1e6667' + amountHex, // requestDeposit(uint256) - FIXED: use amountHex not amountWei
           gas: '0x' + (200000).toString(16) // Set explicit gas limit: 200k
         }]
       })
