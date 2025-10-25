@@ -339,29 +339,34 @@ export default function Home() {
         provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
       }
 
-      // Check vault shares (balanceOf)
-      // Force fresh data by getting latest block first
-      const latestBlock = await provider.request({ method: 'eth_blockNumber', params: [] })
+      // Force fresh data by getting latest block EVERY TIME (cache-busting)
+      // DO NOT reuse block number - fetch it fresh for each call to prevent RPC caching
+      const getLatestBlock = async () => {
+        return await provider.request({ method: 'eth_blockNumber', params: [] })
+      }
       
+      // Get shares balance - fetch fresh block number
+      const sharesBlock = await getLatestBlock()
       const sharesHex = await provider.request({
         method: 'eth_call',
         params: [{
           to: VAULT_ADDRESS,
           data: '0x70a08231000000000000000000000000' + address.slice(2) // balanceOf(address)
-        }, latestBlock] // Use actual latest block number instead of 'latest' tag
+        }, sharesBlock]
       })
       const sharesWei = parseInt(sharesHex, 16)
       const shares = sharesWei / 1e6
       setVaultShares(shares.toFixed(6))
       log(`✅ Vault Shares: ${shares.toFixed(6)} ovUSDC`)
 
-      // Check pending deposit
+      // Check pending deposit - fetch fresh block number separately
+      const depositBlock = await getLatestBlock()
       const pendingDepositHex = await provider.request({
         method: 'eth_call',
         params: [{
           to: VAULT_ADDRESS,
           data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address) - FIXED
-        }, latestBlock] // Use actual latest block
+        }, depositBlock]
       })
       const pendingDepositWei = parseInt(pendingDepositHex, 16)
       const pendingDep = pendingDepositWei / 1e6
@@ -372,13 +377,14 @@ export default function Home() {
         log(`✅ No pending deposit`)
       }
 
-      // Check pending redeem
+      // Check pending redeem - fetch fresh block number separately
+      const redeemBlock = await getLatestBlock()
       const pendingRedeemHex = await provider.request({
         method: 'eth_call',
         params: [{
           to: VAULT_ADDRESS,
           data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address) - FIXED
-        }, latestBlock] // Use actual latest block
+        }, redeemBlock]
       })
       const pendingRedeemWei = parseInt(pendingRedeemHex, 16)
       const pendingRed = pendingRedeemWei / 1e6
@@ -575,7 +581,7 @@ export default function Home() {
               params: [{
                 from: address,
                 to: VAULT_ADDRESS,
-                data: '0xde56603c000000000000000000000000' + address.slice(2), // claimDeposit(address) - FIXED
+                data: '0x29d07a51', // claimDeposit() - NO PARAMETERS for user self-claim
                 gas: '0x' + (150000).toString(16) // Set explicit gas limit: 150k
               }]
             })
@@ -599,7 +605,15 @@ export default function Home() {
           } catch (claimError: any) {
             log(`❌ Claim failed: ${claimError.message}`)
             isClaimingDepositRef.current = false // 🔓 Unlock on error
-            throw claimError
+            
+            // Check if user rejected the transaction
+            if (claimError.message?.includes('User rejected') || claimError.code === 4001) {
+              log('⚠️  User rejected claim transaction - you can try again')
+              setStatus('Claim rejected - you can retry')
+              setDepositProgress('idle')
+              clearInterval(interval)
+            }
+            // Otherwise continue polling (might be a temporary error)
           }
         } else if (pending > 0 && isClaimingDepositRef.current) {
           log('⏳ Claim already in progress, skipping... (flag is locked)')
@@ -609,6 +623,8 @@ export default function Home() {
         if (attempts >= maxAttempts) {
           log('⏱️ Polling timeout. Please try claiming manually.')
           setStatus('Polling timeout - manual claim may be needed')
+          setDepositProgress('idle') // Reset UI state
+          isClaimingDepositRef.current = false // Reset claim flag
           clearInterval(interval)
         }
       }
@@ -756,7 +772,7 @@ export default function Home() {
               params: [{
                 from: address,
                 to: VAULT_ADDRESS,
-                data: '0x0c5cb572000000000000000000000000' + address.slice(2), // claimRedeem(address) - FIXED
+                data: '0x29df8703', // claimRedeem() - NO PARAMETERS for user self-claim
                 gas: '0x' + (150000).toString(16) // Set explicit gas limit: 150k
               }]
             })
@@ -780,7 +796,15 @@ export default function Home() {
           } catch (claimError: any) {
             log(`❌ Claim failed: ${claimError.message}`)
             isClaimingRedeemRef.current = false // 🔓 Unlock on error
-            throw claimError
+            
+            // Check if user rejected the transaction
+            if (claimError.message?.includes('User rejected') || claimError.code === 4001) {
+              log('⚠️  User rejected claim transaction - you can try again')
+              setStatus('Claim rejected - you can retry')
+              setRedeemProgress('idle')
+              clearInterval(interval)
+            }
+            // Otherwise continue polling (might be a temporary error)
           }
         } else if (pending > 0 && isClaimingRedeemRef.current) {
           log('⏳ Claim already in progress, skipping... (flag is locked)')
@@ -790,6 +814,8 @@ export default function Home() {
         if (attempts >= maxAttempts) {
           log('⏱️ Polling timeout. Please try claiming manually.')
           setStatus('Polling timeout - manual claim may be needed')
+          setRedeemProgress('idle') // Reset UI state
+          isClaimingRedeemRef.current = false // Reset claim flag
           clearInterval(interval)
         }
       }
@@ -1234,7 +1260,7 @@ export default function Home() {
                   <ul className="list-disc list-inside space-y-1 text-gray-700">
                     <li><strong>Deposit:</strong> USDC → Approve → Request → Auto-claim → Get asUSDC shares</li>
                     <li><strong>Redeem:</strong> Burn shares → Request → Auto-claim → Get USDC back</li>
-                    <li><strong>Auto-claiming:</strong> {operatorBotEnabled ? '🤖 Operator bot claims automatically' : '👤 Frontend polls every 3 seconds and you approve'}</li>
+                    <li><strong>Auto-claiming:</strong> {operatorBotEnabled ? '🤖 Operator bot claims automatically (no MetaMask popups)' : '👤 Frontend polls every 3 seconds and submits claim tx'}</li>
                     <li><strong>1:1 Pricing:</strong> 1 USDC = 1 asUSDC (initially)</li>
                   </ul>
                 </div>
