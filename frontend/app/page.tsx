@@ -1173,7 +1173,7 @@ export default function Home() {
                           {depositProgress === 'approving' && '1/3: Approving USDC...'}
                           {depositProgress === 'requesting' && '2/3: Requesting deposit...'}
                           {depositProgress === 'waiting_claim' && `3/3: ${operatorBotEnabled ? 'Bot will claim automatically' : 'Waiting for your claim approval'}`}
-                          {depositProgress === 'claiming' && '3/3: Claiming shares...'}
+                          {depositProgress === 'claiming' && `3/3: ${operatorBotEnabled ? 'Bot claiming shares...' : 'Approve claim in MetaMask'}`}
                           {depositProgress === 'success' && '✅ Deposit complete! Shares minted.'}
                         </p>
                       </div>
@@ -1230,7 +1230,7 @@ export default function Home() {
                         <p className="font-semibold text-blue-900">
                           {redeemProgress === 'requesting' && '1/2: Requesting redeem...'}
                           {redeemProgress === 'waiting_claim' && `2/2: ${operatorBotEnabled ? 'Bot will claim automatically' : 'Waiting for your claim approval'}`}
-                          {redeemProgress === 'claiming' && '2/2: Claiming USDC...'}
+                          {redeemProgress === 'claiming' && `2/2: ${operatorBotEnabled ? 'Bot claiming USDC...' : 'Approve claim in MetaMask'}`}
                           {redeemProgress === 'success' && '✅ Redeem complete! USDC returned.'}
                         </p>
                       </div>
