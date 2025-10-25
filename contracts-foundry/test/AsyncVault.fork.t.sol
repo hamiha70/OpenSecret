@@ -78,7 +78,7 @@ contract AsyncVaultForkTest is Test {
     // ═════════════════════════════════════════════════════════════════════════════
 
     function test_Fork_RealUSDCApprovalAndTransfer() public {
-        uint256 amount = 10 * USDC_DECIMALS; // 10 USDC
+        uint256 amount = 2 * USDC_DECIMALS; // 2 USDC (small test amount)
         
         // Check investor has USDC
         uint256 balance = usdc.balanceOf(investor1);
@@ -100,7 +100,7 @@ contract AsyncVaultForkTest is Test {
     }
 
     function test_Fork_FullDepositRedeemCycle() public {
-        uint256 depositAmount = 10 * USDC_DECIMALS; // 10 USDC
+        uint256 depositAmount = 3 * USDC_DECIMALS; // 3 USDC (small test amount)
         
         require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
         
@@ -153,12 +153,12 @@ contract AsyncVaultForkTest is Test {
     // ═════════════════════════════════════════════════════════════════════════════
 
     function test_Fork_OperatorCanClaimForMultipleUsers() public {
-        uint256 amount = 5 * USDC_DECIMALS; // 5 USDC each
+        uint256 amount = 2 * USDC_DECIMALS; // 2 USDC each (small test amount)
         
         require(usdc.balanceOf(investor1) >= amount, "Investor1 needs USDC");
         
         // Give investor2 some USDC (simulate faucet)
-        deal(SEPOLIA_USDC, investor2, 1000 * USDC_DECIMALS);
+        deal(SEPOLIA_USDC, investor2, 10 * USDC_DECIMALS);
         
         // Both investors request deposits
         vm.startPrank(investor1);
@@ -198,7 +198,7 @@ contract AsyncVaultForkTest is Test {
     }
 
     function test_Fork_OperatorCannotClaimTwice() public {
-        uint256 amount = 5 * USDC_DECIMALS;
+        uint256 amount = 2 * USDC_DECIMALS;
         
         require(usdc.balanceOf(investor1) >= amount, "Need USDC");
         
@@ -218,7 +218,7 @@ contract AsyncVaultForkTest is Test {
     }
 
     function test_Fork_NonOperatorCannotClaim() public {
-        uint256 amount = 5 * USDC_DECIMALS;
+        uint256 amount = 2 * USDC_DECIMALS;
         
         require(usdc.balanceOf(investor1) >= amount, "Need USDC");
         
@@ -239,8 +239,8 @@ contract AsyncVaultForkTest is Test {
     // ═════════════════════════════════════════════════════════════════════════════
 
     function test_Fork_SimulatorCanRealizeProfit() public {
-        uint256 depositAmount = 100 * USDC_DECIMALS;
-        uint256 profitAmount = 10 * USDC_DECIMALS; // 10% profit
+        uint256 depositAmount = 4 * USDC_DECIMALS; // 4 USDC deposit
+        uint256 profitAmount = 1 * USDC_DECIMALS;  // 1 USDC profit (25%)
         
         require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
         require(usdc.balanceOf(simulator) >= profitAmount, "Simulator needs USDC for profit");
@@ -287,8 +287,8 @@ contract AsyncVaultForkTest is Test {
     }
 
     function test_Fork_SimulatorCanRealizeLoss() public {
-        uint256 depositAmount = 100 * USDC_DECIMALS;
-        uint256 lossAmount = 5 * USDC_DECIMALS; // 5% loss
+        uint256 depositAmount = 4 * USDC_DECIMALS; // 4 USDC deposit
+        uint256 lossAmount = 1 * USDC_DECIMALS;    // 1 USDC loss (25%)
         
         require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
         
@@ -321,12 +321,12 @@ contract AsyncVaultForkTest is Test {
     // ═════════════════════════════════════════════════════════════════════════════
 
     function test_Fork_MultipleUsersShareProfitProportionally() public {
-        uint256 deposit1 = 60 * USDC_DECIMALS; // 60% of deposits
-        uint256 deposit2 = 40 * USDC_DECIMALS; // 40% of deposits
-        uint256 profit = 10 * USDC_DECIMALS;   // 10 USDC profit
+        uint256 deposit1 = 3 * USDC_DECIMALS; // 60% of deposits (3 USDC)
+        uint256 deposit2 = 2 * USDC_DECIMALS; // 40% of deposits (2 USDC)
+        uint256 profit = 1 * USDC_DECIMALS;   // 1 USDC profit (20%)
         
         require(usdc.balanceOf(investor1) >= deposit1, "Investor1 needs USDC");
-        deal(SEPOLIA_USDC, investor2, 1000 * USDC_DECIMALS);
+        deal(SEPOLIA_USDC, investor2, 10 * USDC_DECIMALS);
         require(usdc.balanceOf(simulator) >= profit, "Simulator needs USDC");
         
         // Both deposit
@@ -364,14 +364,16 @@ contract AsyncVaultForkTest is Test {
         vault.claimRedeemFor(investor2);
         
         // Check proportional profit
-        // Investor1: 60% of 10 USDC = 6 USDC profit
-        // Investor2: 40% of 10 USDC = 4 USDC profit
+        // Investor1: 60% of 1 USDC = 0.6 USDC profit
+        // Investor2: 40% of 1 USDC = 0.4 USDC profit
         console.log("Final balances:");
-        console.log("  Investor1:", usdc.balanceOf(investor1) / USDC_DECIMALS, "USDC (should be ~6 profit)");
-        console.log("  Investor2:", usdc.balanceOf(investor2) / USDC_DECIMALS - 1000, "USDC (should be ~4 profit)");
+        console.log("  Investor1:", usdc.balanceOf(investor1), "USDC (should be ~0.6 USDC profit)");
+        console.log("  Investor2:", usdc.balanceOf(investor2) - (10 * USDC_DECIMALS), "USDC profit (should be ~0.4 USDC)");
         
-        assertApproxEqAbs(usdc.balanceOf(investor1), 6 * USDC_DECIMALS, 1, "Investor1 60% profit");
-        assertApproxEqAbs(usdc.balanceOf(investor2), 1004 * USDC_DECIMALS, 1, "Investor2 40% profit");
+        // Investor1 gets ~0.6 USDC profit (60% of 1 USDC profit = 0.6 USDC)
+        assertApproxEqAbs(usdc.balanceOf(investor1), 0.6e6, 1, "Investor1 60% profit");
+        // Investor2 gets ~0.4 USDC profit (started with 10 USDC, deposited 2, gets back 2.4)
+        assertApproxEqAbs(usdc.balanceOf(investor2), 10.4e6, 1, "Investor2 40% profit");
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -379,7 +381,7 @@ contract AsyncVaultForkTest is Test {
     // ═════════════════════════════════════════════════════════════════════════════
 
     function test_Fork_GasBenchmark_DepositAndClaim() public {
-        uint256 amount = 10 * USDC_DECIMALS;
+        uint256 amount = 2 * USDC_DECIMALS;
         require(usdc.balanceOf(investor1) >= amount, "Need USDC");
         
         // Measure requestDeposit gas
