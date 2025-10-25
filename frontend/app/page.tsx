@@ -447,6 +447,18 @@ export default function Home() {
         })
         const pending = parseInt(pendingHex, 16) / 1e6
 
+        // If no pending deposit, stop polling (already claimed by bot or self)
+        if (pending === 0) {
+          log('✅ Deposit already claimed (by bot or completed)')
+          setDepositProgress('success')
+          setStatus('✅ Deposit complete!')
+          clearInterval(interval)
+          await checkUSDC()
+          await checkVaultBalances()
+          setTimeout(() => setDepositProgress('idle'), 3000)
+          return
+        }
+
         if (pending > 0 && !isClaimingDepositRef.current) {
           isClaimingDepositRef.current = true // 🔒 Lock to prevent multiple claims
           log(`✅ Found pending deposit: ${pending.toFixed(6)} USDC`)
@@ -615,6 +627,18 @@ export default function Home() {
           }, 'latest']
         })
         const pending = parseInt(pendingHex, 16) / 1e6
+
+        // If no pending redeem, stop polling (already claimed by bot or self)
+        if (pending === 0) {
+          log('✅ Redeem already claimed (by bot or completed)')
+          setRedeemProgress('success')
+          setStatus('✅ Redeem complete!')
+          clearInterval(interval)
+          await checkUSDC()
+          await checkVaultBalances()
+          setTimeout(() => setRedeemProgress('idle'), 3000)
+          return
+        }
 
         if (pending > 0 && !isClaimingRedeemRef.current) {
           isClaimingRedeemRef.current = true // 🔒 Lock to prevent multiple claims
