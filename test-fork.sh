@@ -35,9 +35,10 @@ echo ""
 
 cd contracts-foundry
 
+# Foundry will read .env from contracts-foundry or parent directory
+# But we'll also pass it explicitly for clarity
 forge test \
     --match-contract AsyncVaultForkTest \
-    --fork-url "$ETHEREUM_SEPOLIA_RPC" \
     -vv
 
 EXIT_CODE=$?

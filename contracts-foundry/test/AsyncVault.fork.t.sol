@@ -35,8 +35,9 @@ contract AsyncVaultForkTest is Test {
     uint256 constant USDC_DECIMALS = 1e6;
 
     function setUp() public {
-        // Fork Sepolia at latest block
-        vm.createSelectFork(vm.rpcUrl("sepolia"));
+        // Fork Sepolia at latest block using RPC from environment
+        string memory rpcUrl = vm.envString("ETHEREUM_SEPOLIA_RPC");
+        vm.createSelectFork(rpcUrl);
         
         // Load real addresses from environment
         deployer = vm.envAddress("DEPLOYER_ADDRESS");
@@ -245,6 +246,8 @@ contract AsyncVaultForkTest is Test {
         require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
         require(usdc.balanceOf(simulator) >= profitAmount, "Simulator needs USDC for profit");
         
+        uint256 initialBalance = usdc.balanceOf(investor1);
+        
         // Setup: Investor deposits
         vm.startPrank(investor1);
         usdc.approve(address(vault), depositAmount);
@@ -277,10 +280,11 @@ contract AsyncVaultForkTest is Test {
         vm.prank(operator);
         vault.claimRedeemFor(investor1);
         
-        // Should get original + profit (±1 wei)
+        // Should get back: (initialBalance - depositAmount) + depositAmount + profitAmount
+        // = initialBalance + profitAmount
         assertApproxEqAbs(
             usdc.balanceOf(investor1), 
-            profitAmount, // Started with 0 after deposit
+            initialBalance + profitAmount,
             1, 
             "Should receive profit"
         );
@@ -326,8 +330,10 @@ contract AsyncVaultForkTest is Test {
         uint256 profit = 1 * USDC_DECIMALS;   // 1 USDC profit (20%)
         
         require(usdc.balanceOf(investor1) >= deposit1, "Investor1 needs USDC");
-        deal(SEPOLIA_USDC, investor2, 10 * USDC_DECIMALS);
+        deal(SEPOLIA_USDC, investor2, deposit2); // Give investor2 exactly what they need
         require(usdc.balanceOf(simulator) >= profit, "Simulator needs USDC");
+        
+        uint256 investor1InitialBalance = usdc.balanceOf(investor1);
         
         // Both deposit
         vm.startPrank(investor1);
@@ -352,28 +358,39 @@ contract AsyncVaultForkTest is Test {
         vault.realizeProfit(address(usdc), profit);
         vm.stopPrank();
         
-        // Both redeem
+        console.log("After profit, before redeem:");
+        console.log("  Investor1 shares:", vault.balanceOf(investor1));
+        console.log("  Investor2 shares:", vault.balanceOf(investor2));
+        console.log("  Total supply:", vault.totalSupply());
+        console.log("  Total assets:", vault.totalAssets());
+        
+        // Both redeem (request first, then claim)
+        uint256 investor1Shares = vault.balanceOf(investor1);
+        uint256 investor2Shares = vault.balanceOf(investor2);
+        
         vm.prank(investor1);
-        vault.requestRedeem(vault.balanceOf(investor1));
+        vault.requestRedeem(investor1Shares);
+        
+        vm.prank(investor2);
+        vault.requestRedeem(investor2Shares);
+        
         vm.prank(operator);
         vault.claimRedeemFor(investor1);
         
-        vm.prank(investor2);
-        vault.requestRedeem(vault.balanceOf(investor2));
         vm.prank(operator);
         vault.claimRedeemFor(investor2);
         
         // Check proportional profit
-        // Investor1: 60% of 1 USDC = 0.6 USDC profit
-        // Investor2: 40% of 1 USDC = 0.4 USDC profit
+        // Investor1: deposited 3, gets back 3.6 (60% of 1 USDC profit = 0.6)
+        // Investor2: deposited 2, gets back 2.4 (40% of 1 USDC profit = 0.4)
         console.log("Final balances:");
-        console.log("  Investor1:", usdc.balanceOf(investor1), "USDC (should be ~0.6 USDC profit)");
-        console.log("  Investor2:", usdc.balanceOf(investor2) - (10 * USDC_DECIMALS), "USDC profit (should be ~0.4 USDC)");
+        console.log("  Investor1:", usdc.balanceOf(investor1), "USDC");
+        console.log("  Investor2:", usdc.balanceOf(investor2), "USDC");
         
-        // Investor1 gets ~0.6 USDC profit (60% of 1 USDC profit = 0.6 USDC)
-        assertApproxEqAbs(usdc.balanceOf(investor1), 0.6e6, 1, "Investor1 60% profit");
-        // Investor2 gets ~0.4 USDC profit (started with 10 USDC, deposited 2, gets back 2.4)
-        assertApproxEqAbs(usdc.balanceOf(investor2), 10.4e6, 1, "Investor2 40% profit");
+        // Investor1: initialBalance - deposit1 + (deposit1 + 0.6) = initialBalance + 0.6
+        assertApproxEqAbs(usdc.balanceOf(investor1), investor1InitialBalance + 0.6e6, 1, "Investor1 60% profit");
+        // Investor2: 0 + 2.4 = 2.4 USDC (we dealt them exactly deposit2, they get back deposit2 + profit)
+        assertApproxEqAbs(usdc.balanceOf(investor2), 2.4e6, 1, "Investor2 40% profit");
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -405,6 +422,543 @@ contract AsyncVaultForkTest is Test {
         
         // These are just informational, no assertions
         // Typical values: requestDeposit ~100k, claimDepositFor ~80k
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // USER SELF-CLAIM TESTS (vs operator claim)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    function test_Fork_UserCanSelfClaimDeposit() public {
+        uint256 depositAmount = 3 * USDC_DECIMALS;
+        
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        // User deposits
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        
+        // User self-claims (NOT operator)
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        // Verify user received shares
+        assertEq(vault.balanceOf(investor1), depositAmount, "User should have shares");
+    }
+
+    function test_Fork_UserCanSelfClaimRedeem() public {
+        uint256 depositAmount = 3 * USDC_DECIMALS;
+        
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        uint256 initialBalance = usdc.balanceOf(investor1);
+        
+        // Setup: deposit and claim
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        
+        uint256 shares = vault.balanceOf(investor1);
+        
+        // User redeems and self-claims
+        vault.requestRedeem(shares);
+        vault.claimRedeem();
+        vm.stopPrank();
+        
+        // Verify user got USDC back
+        assertApproxEqAbs(usdc.balanceOf(investor1), initialBalance, 1, "Should get USDC back");
+        assertEq(vault.balanceOf(investor1), 0, "Should have no shares");
+    }
+
+    function test_Fork_OperatorCannotClaimIfUserAlreadyClaimed() public {
+        uint256 depositAmount = 2 * USDC_DECIMALS;
+        
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        // User deposits and self-claims
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        // Operator tries to claim again
+        vm.prank(operator);
+        vm.expectRevert("Already fulfilled");
+        vault.claimDepositFor(investor1);
+    }
+
+    function test_Fork_UserCannotClaimIfOperatorAlreadyClaimed() public {
+        uint256 depositAmount = 2 * USDC_DECIMALS;
+        
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        // User deposits
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vm.stopPrank();
+        
+        // Operator claims
+        vm.prank(operator);
+        vault.claimDepositFor(investor1);
+        
+        // User tries to self-claim
+        vm.prank(investor1);
+        vm.expectRevert("Already fulfilled");
+        vault.claimDeposit();
+    }
+
+    function test_Fork_MixedClaimingMultipleUsers() public {
+        uint256 deposit1 = 3 * USDC_DECIMALS;
+        uint256 deposit2 = 2 * USDC_DECIMALS;
+        
+        require(usdc.balanceOf(investor1) >= deposit1, "Need USDC");
+        deal(SEPOLIA_USDC, investor2, deposit2);
+        
+        // Investor1 deposits (will self-claim)
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), deposit1);
+        vault.requestDeposit(deposit1);
+        vm.stopPrank();
+        
+        // Investor2 deposits (operator will claim)
+        vm.startPrank(investor2);
+        usdc.approve(address(vault), deposit2);
+        vault.requestDeposit(deposit2);
+        vm.stopPrank();
+        
+        // Investor1 self-claims
+        vm.prank(investor1);
+        vault.claimDeposit();
+        
+        // Operator claims for investor2
+        vm.prank(operator);
+        vault.claimDepositFor(investor2);
+        
+        // Both should have shares
+        assertEq(vault.balanceOf(investor1), deposit1, "Investor1 should have shares");
+        assertEq(vault.balanceOf(investor2), deposit2, "Investor2 should have shares");
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // SHARE PRICE CALCULATION TESTS (existing vault state)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    function test_Fork_ShareCalculationWithExistingShares() public {
+        // Setup: Create a vault with existing state
+        // Investor1 deposits 10 USDC, gets 10M shares (1:1 initially)
+        uint256 initialDeposit = 10 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= initialDeposit, "Need USDC");
+        
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), initialDeposit);
+        vault.requestDeposit(initialDeposit);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        console.log("After initial deposit:");
+        console.log("  Total assets:", vault.totalAssets());
+        console.log("  Total supply:", vault.totalSupply());
+        console.log("  Share price:", vault.convertToAssets(1e18), "assets per 1e18 shares");
+        
+        // Now investor2 deposits 5 USDC
+        // Should get 5M shares (still 1:1 since no profit/loss)
+        uint256 secondDeposit = 5 * USDC_DECIMALS;
+        deal(SEPOLIA_USDC, investor2, secondDeposit);
+        
+        vm.startPrank(investor2);
+        usdc.approve(address(vault), secondDeposit);
+        vault.requestDeposit(secondDeposit);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        console.log("After second deposit:");
+        console.log("  Total assets:", vault.totalAssets());
+        console.log("  Total supply:", vault.totalSupply());
+        console.log("  Investor2 shares:", vault.balanceOf(investor2));
+        
+        // Verify: investor2 should have ~5M shares (1:1 ratio maintained)
+        assertEq(vault.balanceOf(investor2), secondDeposit, "Should maintain 1:1 ratio");
+    }
+
+    function test_Fork_ShareCalculationAfterProfit() public {
+        // Setup: Create vault with existing state
+        uint256 initialDeposit = 10 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= initialDeposit, "Need USDC");
+        
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), initialDeposit);
+        vault.requestDeposit(initialDeposit);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        // Realize 5 USDC profit (50% gain)
+        // Now: 10M shares backed by 15 USDC = 1.5 USDC per share
+        uint256 profit = 5 * USDC_DECIMALS;
+        require(usdc.balanceOf(simulator) >= profit, "Simulator needs USDC");
+        
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), profit);
+        vault.realizeProfit(address(usdc), profit);
+        vm.stopPrank();
+        
+        console.log("After profit:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        console.log("  Total supply:", vault.totalSupply() / USDC_DECIMALS, "M shares");
+        console.log("  Share price: 1 share =", vault.convertToAssets(1e6), "USDC (scaled by 1e6)");
+        
+        // Now investor2 deposits 6 USDC
+        // Should get: 6 USDC / 1.5 USDC per share = 4M shares
+        uint256 secondDeposit = 6 * USDC_DECIMALS;
+        deal(SEPOLIA_USDC, investor2, secondDeposit);
+        
+        vm.startPrank(investor2);
+        usdc.approve(address(vault), secondDeposit);
+        vault.requestDeposit(secondDeposit);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        uint256 expectedShares = vault.convertToShares(secondDeposit);
+        console.log("Investor2 got:", vault.balanceOf(investor2) / USDC_DECIMALS, "M shares");
+        console.log("Expected:", expectedShares / USDC_DECIMALS, "M shares");
+        
+        // Verify: investor2 should get 4M shares (6 USDC / 1.5 = 4)
+        assertApproxEqAbs(vault.balanceOf(investor2), 4 * USDC_DECIMALS, 1, "Should get 4M shares");
+    }
+
+    function test_Fork_ShareCalculationAfterLoss() public {
+        // Setup: Create vault with existing state
+        uint256 initialDeposit = 10 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= initialDeposit, "Need USDC");
+        
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), initialDeposit);
+        vault.requestDeposit(initialDeposit);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        // Realize 2 USDC loss (20% loss)
+        // Now: 10M shares backed by 8 USDC = 0.8 USDC per share
+        uint256 loss = 2 * USDC_DECIMALS;
+        
+        vm.prank(simulator);
+        vault.realizeLoss(address(usdc), loss);
+        
+        console.log("After loss:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        console.log("  Total supply:", vault.totalSupply() / USDC_DECIMALS, "M shares");
+        console.log("  Share price: 1 share =", vault.convertToAssets(1e6), "USDC (scaled by 1e6)");
+        
+        // Now investor2 deposits 4 USDC
+        // Should get: 4 USDC / 0.8 USDC per share = 5M shares
+        uint256 secondDeposit = 4 * USDC_DECIMALS;
+        deal(SEPOLIA_USDC, investor2, secondDeposit);
+        
+        vm.startPrank(investor2);
+        usdc.approve(address(vault), secondDeposit);
+        vault.requestDeposit(secondDeposit);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        uint256 expectedShares = vault.convertToShares(secondDeposit);
+        console.log("Investor2 got:", vault.balanceOf(investor2) / USDC_DECIMALS, "M shares");
+        console.log("Expected:", expectedShares / USDC_DECIMALS, "M shares");
+        
+        // Verify: investor2 should get 5M shares (4 USDC / 0.8 = 5)
+        assertApproxEqAbs(vault.balanceOf(investor2), 5 * USDC_DECIMALS, 1, "Should get 5M shares");
+    }
+
+    function test_Fork_LargeVaultState_NewSmallDeposit() public {
+        // Simulate a large existing vault
+        // Investor1 deposits 100 USDC
+        uint256 largeDeposit = 42 * USDC_DECIMALS; // Use all available
+        require(usdc.balanceOf(investor1) >= largeDeposit, "Need USDC");
+        
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), largeDeposit);
+        vault.requestDeposit(largeDeposit);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        // Realize significant profit (20 USDC)
+        // Now: 42M shares backed by 62 USDC
+        uint256 profit = 15 * USDC_DECIMALS; // Use available simulator USDC
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), profit);
+        vault.realizeProfit(address(usdc), profit);
+        vm.stopPrank();
+        
+        console.log("Large vault state:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        console.log("  Total supply:", vault.totalSupply() / USDC_DECIMALS, "M shares");
+        console.log("  Share price:", vault.convertToAssets(1e6), "per 1M shares");
+        
+        // Small investor deposits 2 USDC
+        uint256 smallDeposit = 2 * USDC_DECIMALS;
+        deal(SEPOLIA_USDC, investor2, smallDeposit);
+        
+        vm.startPrank(investor2);
+        usdc.approve(address(vault), smallDeposit);
+        vault.requestDeposit(smallDeposit);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        // Verify small investor gets proportional shares
+        uint256 expectedShares = vault.convertToShares(smallDeposit);
+        console.log("Small investor got:", vault.balanceOf(investor2));
+        console.log("Expected shares:", expectedShares);
+        
+        assertApproxEqAbs(vault.balanceOf(investor2), expectedShares, 2, "Should get correct share amount");
+        
+        // Verify share price is maintained
+        uint256 totalAssets = vault.totalAssets();
+        uint256 totalSupply = vault.totalSupply();
+        console.log("Final state:");
+        console.log("  Total assets:", totalAssets / USDC_DECIMALS, "USDC");
+        console.log("  Total supply:", totalSupply / USDC_DECIMALS, "M shares");
+        
+        // Total assets should be ~59 USDC (42 + 15 + 2)
+        assertApproxEqAbs(totalAssets, 59 * USDC_DECIMALS, 2, "Total assets correct");
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // PROFIT/LOSS BETWEEN REQUEST AND CLAIM (Centrifuge Pattern Tests)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    function test_Fork_ProfitBetweenDepositRequestAndClaim() public {
+        uint256 depositAmount = 10 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        uint256 initialBalance = usdc.balanceOf(investor1);
+        
+        // User deposits and requests
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vm.stopPrank();
+        
+        // PROFIT happens between request and claim!
+        // This should NOT affect the deposit (user deposited 10, should get 10M shares)
+        uint256 profit = 5 * USDC_DECIMALS;
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), profit);
+        vault.realizeProfit(address(usdc), profit);
+        vm.stopPrank();
+        
+        console.log("After profit, before claim:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        console.log("  Total supply:", vault.totalSupply() / USDC_DECIMALS, "M shares");
+        
+        // Now claim the deposit
+        vm.prank(operator);
+        vault.claimDepositFor(investor1);
+        
+        // User should still get 10M shares (deposit was already in vault)
+        // But now those 10M shares are worth more due to profit!
+        assertEq(vault.balanceOf(investor1), depositAmount, "Should get original share amount");
+        
+        console.log("After claim:");
+        console.log("  Investor1 shares:", vault.balanceOf(investor1) / USDC_DECIMALS, "M");
+        console.log("  Share value:", vault.convertToAssets(vault.balanceOf(investor1)) / USDC_DECIMALS, "USDC");
+    }
+
+    function test_Fork_ProfitBetweenRedeemRequestAndClaim_UserGetsProfit() public {
+        // Setup: User has shares in vault
+        uint256 depositAmount = 10 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        uint256 initialBalance = usdc.balanceOf(investor1);
+        
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        uint256 shares = vault.balanceOf(investor1);
+        console.log("Initial state:");
+        console.log("  User has:", shares / USDC_DECIMALS, "M shares");
+        console.log("  Worth:", vault.convertToAssets(shares) / USDC_DECIMALS, "USDC");
+        
+        // User requests redeem
+        vm.prank(investor1);
+        vault.requestRedeem(shares);
+        
+        // PROFIT happens between request and claim! (Centrifuge pattern test)
+        // User should benefit from this profit at claim time
+        uint256 profit = 5 * USDC_DECIMALS;
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), profit);
+        vault.realizeProfit(address(usdc), profit);
+        vm.stopPrank();
+        
+        console.log("After profit, before claim:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        console.log("  Share value:", vault.convertToAssets(shares) / USDC_DECIMALS, "USDC");
+        
+        // Claim redeem (assets calculated NOW, not at request time)
+        vm.prank(operator);
+        vault.claimRedeemFor(investor1);
+        
+        uint256 finalBalance = usdc.balanceOf(investor1);
+        console.log("Final balance:", finalBalance / USDC_DECIMALS, "USDC");
+        console.log("Profit gained:", (finalBalance - initialBalance) / USDC_DECIMALS, "USDC");
+        
+        // User should get MORE than they deposited (10 + 5 = 15 USDC)
+        assertApproxEqAbs(finalBalance, initialBalance + profit, 1, "User should get profit");
+        assertGt(finalBalance, initialBalance, "User must profit");
+    }
+
+    function test_Fork_LossBetweenRedeemRequestAndClaim_UserBearsLoss() public {
+        // Setup: User has shares in vault
+        uint256 depositAmount = 10 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        uint256 initialBalance = usdc.balanceOf(investor1);
+        
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        uint256 shares = vault.balanceOf(investor1);
+        console.log("Initial state:");
+        console.log("  User has:", shares / USDC_DECIMALS, "M shares");
+        console.log("  Worth:", vault.convertToAssets(shares) / USDC_DECIMALS, "USDC");
+        
+        // User requests redeem
+        vm.prank(investor1);
+        vault.requestRedeem(shares);
+        
+        // LOSS happens between request and claim! (Centrifuge pattern test)
+        // User should bear this loss at claim time
+        uint256 loss = 3 * USDC_DECIMALS;
+        vm.prank(simulator);
+        vault.realizeLoss(address(usdc), loss);
+        
+        console.log("After loss, before claim:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        console.log("  Share value:", vault.convertToAssets(shares) / USDC_DECIMALS, "USDC");
+        
+        // Claim redeem (assets calculated NOW, not at request time)
+        vm.prank(operator);
+        vault.claimRedeemFor(investor1);
+        
+        uint256 finalBalance = usdc.balanceOf(investor1);
+        console.log("Final balance:", finalBalance / USDC_DECIMALS, "USDC");
+        console.log("Loss absorbed:", (initialBalance - finalBalance) / USDC_DECIMALS, "USDC");
+        
+        // User should get LESS than they deposited (10 - 3 = 7 USDC)
+        assertApproxEqAbs(finalBalance, initialBalance - loss, 1, "User should bear loss");
+        assertLt(finalBalance, initialBalance, "User must absorb loss");
+    }
+
+    function test_Fork_MultipleProfit_LossEvents_BetweenRequestAndClaim() public {
+        // Setup: User deposits
+        uint256 depositAmount = 10 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        uint256 initialBalance = usdc.balanceOf(investor1);
+        
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        uint256 shares = vault.balanceOf(investor1);
+        
+        // User requests redeem
+        vm.prank(investor1);
+        vault.requestRedeem(shares);
+        
+        // Multiple events between request and claim!
+        // +5 USDC profit
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), 5 * USDC_DECIMALS);
+        vault.realizeProfit(address(usdc), 5 * USDC_DECIMALS);
+        vm.stopPrank();
+        
+        console.log("After +5 profit:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        
+        // -2 USDC loss
+        vm.prank(simulator);
+        vault.realizeLoss(address(usdc), 2 * USDC_DECIMALS);
+        
+        console.log("After -2 loss:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        
+        // +1 USDC profit again
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), 1 * USDC_DECIMALS);
+        vault.realizeProfit(address(usdc), 1 * USDC_DECIMALS);
+        vm.stopPrank();
+        
+        console.log("After +1 profit:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        
+        // Net: +5 -2 +1 = +4 USDC
+        // Claim redeem
+        vm.prank(operator);
+        vault.claimRedeemFor(investor1);
+        
+        uint256 finalBalance = usdc.balanceOf(investor1);
+        uint256 netProfit = finalBalance - initialBalance;
+        
+        console.log("Final balance:", finalBalance / USDC_DECIMALS, "USDC");
+        console.log("Net profit:", netProfit / USDC_DECIMALS, "USDC");
+        
+        // User should get net profit of ~4 USDC (10 + 5 - 2 + 1 = 14)
+        assertApproxEqAbs(finalBalance, initialBalance + 4 * USDC_DECIMALS, 1, "Should reflect net profit");
+    }
+
+    function test_Fork_ProfitAfterFullCycle_UserKeepsGains() public {
+        // Scenario: Deposit → Profit → Redeem (NOT between request/claim)
+        uint256 depositAmount = 10 * USDC_DECIMALS;
+        require(usdc.balanceOf(investor1) >= depositAmount, "Need USDC");
+        
+        uint256 initialBalance = usdc.balanceOf(investor1);
+        
+        // Full deposit cycle
+        vm.startPrank(investor1);
+        usdc.approve(address(vault), depositAmount);
+        vault.requestDeposit(depositAmount);
+        vault.claimDeposit();
+        vm.stopPrank();
+        
+        uint256 sharesAfterDeposit = vault.balanceOf(investor1);
+        console.log("After deposit:");
+        console.log("  User shares:", sharesAfterDeposit / USDC_DECIMALS, "M");
+        
+        // Profit happens AFTER deposit is settled
+        uint256 profit = 5 * USDC_DECIMALS;
+        vm.startPrank(simulator);
+        usdc.transfer(address(vault), profit);
+        vault.realizeProfit(address(usdc), profit);
+        vm.stopPrank();
+        
+        console.log("After settled deposit + profit:");
+        console.log("  Total assets:", vault.totalAssets() / USDC_DECIMALS, "USDC");
+        console.log("  User shares:", vault.balanceOf(investor1) / USDC_DECIMALS, "M");
+        
+        // Full redeem cycle
+        uint256 sharesToRedeem = vault.balanceOf(investor1);
+        console.log("Attempting to redeem:", sharesToRedeem / USDC_DECIMALS, "M shares");
+        
+        vm.prank(investor1);
+        vault.requestRedeem(sharesToRedeem);
+        vm.prank(operator);
+        vault.claimRedeemFor(investor1);
+        
+        uint256 finalBalance = usdc.balanceOf(investor1);
+        console.log("Final balance:", finalBalance / USDC_DECIMALS, "USDC");
+        
+        // User should get profit (10 + 5 = 15 USDC)
+        assertApproxEqAbs(finalBalance, initialBalance + profit, 1, "Should keep profit");
     }
 }
 
