@@ -935,6 +935,133 @@ export default function Home() {
             </div>
           )}
 
+          {/* Bot Control Section */}
+          {connected && (
+            <div className="border rounded-lg p-6 bg-gradient-to-r from-green-50 to-teal-50">
+              <h2 className="text-xl font-semibold mb-4">🎮 Bot Control Center</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Start/stop bots for automated claiming and market simulation.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Operator Bot Control */}
+                <div className="p-4 bg-white rounded-lg border">
+                  <h3 className="font-semibold mb-2">🤖 Operator Bot</h3>
+                  <p className="text-xs text-gray-600 mb-3">Auto-claims deposits/redeems for users</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/operator-bot', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'start' })
+                          })
+                          const data = await res.json()
+                          log(`✅ Operator bot: ${data.message}`)
+                        } catch (error: any) {
+                          log(`❌ Operator bot error: ${error.message}`)
+                        }
+                      }}
+                      className="flex-1 bg-green-500 text-white px-4 py-2 rounded text-sm hover:bg-green-600"
+                    >
+                      ▶️ Start
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/operator-bot', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'stop' })
+                          })
+                          const data = await res.json()
+                          log(`⏸️ Operator bot: ${data.message}`)
+                        } catch (error: any) {
+                          log(`❌ Operator bot error: ${error.message}`)
+                        }
+                      }}
+                      className="flex-1 bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600"
+                    >
+                      ⏸️ Stop
+                    </button>
+                  </div>
+                </div>
+
+                {/* Market Simulator Control */}
+                <div className="p-4 bg-white rounded-lg border">
+                  <h3 className="font-semibold mb-2">📊 Market Simulator</h3>
+                  <p className="text-xs text-gray-600 mb-3">Simulates profits/losses every 60s</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/market-simulator', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'start' })
+                          })
+                          const data = await res.json()
+                          log(`✅ Market simulator: ${data.message}`)
+                        } catch (error: any) {
+                          log(`❌ Market simulator error: ${error.message}`)
+                        }
+                      }}
+                      className="flex-1 bg-green-500 text-white px-4 py-2 rounded text-sm hover:bg-green-600"
+                    >
+                      ▶️ Start
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/market-simulator', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'stop' })
+                          })
+                          const data = await res.json()
+                          log(`⏸️ Market simulator: ${data.message}`)
+                        } catch (error: any) {
+                          log(`❌ Market simulator error: ${error.message}`)
+                        }
+                      }}
+                      className="flex-1 bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600"
+                    >
+                      ⏸️ Stop
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/market-simulator', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'trigger' })
+                          })
+                          const data = await res.json()
+                          log(`🎲 Market event triggered manually`)
+                        } catch (error: any) {
+                          log(`❌ Market simulator error: ${error.message}`)
+                        }
+                      }}
+                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600"
+                    >
+                      🎲
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded text-xs">
+                <p className="font-semibold text-yellow-900">💡 Note:</p>
+                <p className="text-yellow-800">
+                  • Operator bot: Automatically claims deposits/redeems (replaces manual claiming)<br />
+                  • Market simulator: Transfers real USDC to/from vault to simulate price changes<br />
+                  • 🎲 = Trigger one market event immediately (for testing)
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Step 2: Check USDC */}
           <div className="border rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Step 2: Check USDC Balance</h2>
