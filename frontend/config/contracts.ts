@@ -17,9 +17,10 @@ export const CONTRACTS = {
     chainId: 11155111, // Sepolia
   },
   
-  // USDC on Ethereum Sepolia (Circle's official deployment)
+  // USDC on multiple testnets (Circle's official deployments)
   usdc: {
     sepolia: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as const,
+    baseSepolia: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as const, // Base Sepolia (best for Avail)
     arbitrumSepolia: '0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d' as const,
   },
   
@@ -29,21 +30,28 @@ export const CONTRACTS = {
 
 export const CHAIN_IDS = {
   SEPOLIA: 11155111,
+  BASE_SEPOLIA: 84532, // Base Sepolia - most stable for Avail Nexus
   ARBITRUM_SEPOLIA: 421614,
 } as const;
 
 export const CHAIN_NAMES = {
   [CHAIN_IDS.SEPOLIA]: 'Ethereum Sepolia',
+  [CHAIN_IDS.BASE_SEPOLIA]: 'Base Sepolia',
   [CHAIN_IDS.ARBITRUM_SEPOLIA]: 'Arbitrum Sepolia',
 } as const;
 
 export const RPC_URLS = {
   [CHAIN_IDS.SEPOLIA]: process.env.NEXT_PUBLIC_ETHEREUM_SEPOLIA_RPC || 'https://rpc.sepolia.org',
+  [CHAIN_IDS.BASE_SEPOLIA]: process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || 'https://sepolia.base.org',
   [CHAIN_IDS.ARBITRUM_SEPOLIA]: process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC || 'https://sepolia-rollup.arbitrum.io/rpc',
 } as const;
 
 export const BLOCK_EXPLORERS = {
   [CHAIN_IDS.SEPOLIA]: 'https://eth-sepolia.blockscout.com',
+  [CHAIN_IDS.BASE_SEPOLIA]: 'https://base-sepolia.blockscout.com',
   [CHAIN_IDS.ARBITRUM_SEPOLIA]: 'https://sepolia.arbiscan.io',
 } as const;
+
+// Avail Nexus Bridge Address (placeholder - will be determined in Phase 3)
+export const AVAIL_BRIDGE_ADDRESS = '0x0000000000000000000000000000000000000000' as const; // TODO: Update with actual Avail bridge address
 

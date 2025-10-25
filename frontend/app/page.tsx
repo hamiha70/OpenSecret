@@ -28,8 +28,10 @@ export default function Home() {
 
   // Contract addresses
   const USDC_SEPOLIA = CONTRACTS.usdc.sepolia
+  const USDC_BASE_SEPOLIA = CONTRACTS.usdc.baseSepolia // Base Sepolia (best for Avail)
   const USDC_ARB_SEPOLIA = CONTRACTS.usdc.arbitrumSepolia
   const VAULT_ADDRESS = CONTRACTS.vault.address
+  const AVAIL_BRIDGE_ADDRESS = '0x0000000000000000000000000000000000000000' // TODO: Update in Phase 3
 
   const log = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -169,6 +171,81 @@ export default function Home() {
     } catch (error: any) {
       log(`❌ Revoke error: ${error.message}`)
       setStatus(`Revoke failed: ${error.message}`)
+    }
+  }
+
+  const approveUSDCForAvailBridge = async () => {
+    try {
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      log('🌉 APPROVING USDC FOR AVAIL BRIDGE')
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      setStatus('Approving USDC for Avail Bridge...')
+
+      let provider = window.ethereum
+      if (window.ethereum?.providers) {
+        provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
+      }
+
+      // Check current chain
+      const chainId = await provider.request({ method: 'eth_chainId' })
+      log(`Current chain: ${chainId}`)
+
+      // Switch to Base Sepolia if needed
+      if (chainId !== '0x14a34') { // Base Sepolia chain ID (84532 = 0x14a34)
+        log('⚠️  Not on Base Sepolia - switching networks...')
+        try {
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x14a34' }],
+          })
+          log('✅ Switched to Base Sepolia successfully!')
+        } catch (switchError: any) {
+          log(`❌ Failed to switch: ${switchError.message}`)
+          throw new Error(`Wrong network! Please switch to Base Sepolia in MetaMask`)
+        }
+      }
+
+      // Approve max uint256 for unlimited spending
+      const maxApproval = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+      
+      log('💰 Approving unlimited USDC for Avail bridge on Base Sepolia...')
+      log('   (This is a one-time approval for cross-chain bridging)')
+      log('⚠️  Note: Avail bridge address is placeholder - will be updated in Phase 3')
+      
+      const approveTx = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: USDC_BASE_SEPOLIA,
+          data: '0x095ea7b3' + // approve(address,uint256)
+                AVAIL_BRIDGE_ADDRESS.slice(2).padStart(64, '0') + // bridge address (TODO: update)
+                maxApproval.slice(2), // max amount
+          gas: '0x' + (100000).toString(16)
+        }]
+      })
+      
+      log(`📤 Approval tx on Base Sepolia: ${approveTx}`)
+      log('⏳ Waiting for confirmation...')
+      await waitForTransaction(provider, approveTx)
+      
+      log('✅ USDC approved for Avail bridge! You can now bridge from Base → Sepolia')
+      log('💡 Switching back to Ethereum Sepolia for vault operations...')
+      
+      // Switch back to Sepolia
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0xaa36a7' }], // Sepolia
+        })
+        log('✅ Switched back to Ethereum Sepolia')
+      } catch (switchError: any) {
+        log('⚠️  Please manually switch back to Ethereum Sepolia')
+      }
+      
+      setStatus('✅ USDC approved for Avail bridge')
+    } catch (error: any) {
+      log(`❌ Avail bridge approval error: ${error.message}`)
+      setStatus(`Avail bridge approval failed: ${error.message}`)
     }
   }
 
@@ -855,7 +932,7 @@ export default function Home() {
                       onClick={approveUSDC}
                       className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 font-semibold text-sm"
                     >
-                      ✅ Approve USDC
+                      ✅ Approve USDC (Vault)
                     </button>
                     <button
                       onClick={revokeUSDC}
@@ -866,6 +943,25 @@ export default function Home() {
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
                     💡 You can revoke approval anytime for security
+                  </p>
+                </div>
+                
+                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
+                  <p className="font-semibold text-blue-900 mb-2">🌉 Cross-Chain Bridge (Avail Nexus)</p>
+                  <p className="text-sm text-blue-800 mb-3">
+                    Approve USDC on Base Sepolia for automatic bridging to Sepolia!
+                  </p>
+                  <button
+                    onClick={approveUSDCForAvailBridge}
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 font-semibold text-sm"
+                  >
+                    🌉 Approve USDC (Avail Bridge)
+                  </button>
+                  <p className="text-xs text-gray-600 mt-2">
+                    💡 This switches to Base Sepolia, approves USDC for the Avail bridge, then switches back
+                  </p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️  Coming in Phase 3 - bridge address is placeholder for now
                   </p>
                 </div>
               </div>
