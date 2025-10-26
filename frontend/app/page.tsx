@@ -20,7 +20,15 @@ export default function Home() {
   const [operatorBotEnabled, setOperatorBotEnabled] = useState(false)
   
   // Cross-chain deposit state
-  const [sourceChain, setSourceChain] = useState<'sepolia' | 'arbitrum-sepolia' | 'base-sepolia' | 'optimism-sepolia' | 'polygon-amoy'>('sepolia') // ✅ Default to Sepolia (cross-chain) instead of Arbitrum Sepolia (same-chain)
+  // ✅ Smart default: If vault is on Arbitrum Sepolia, default to Ethereum Sepolia (most stable for Avail)
+  //    If vault is on Ethereum Sepolia, default to Base Sepolia
+  const getDefaultSourceChain = (): 'sepolia' | 'arbitrum-sepolia' | 'base-sepolia' | 'optimism-sepolia' | 'polygon-amoy' => {
+    if (VAULT_CHAIN_ID === 421614) return 'sepolia'        // Vault on Arbitrum → Default Ethereum Sepolia
+    if (VAULT_CHAIN_ID === 11155111) return 'base-sepolia' // Vault on Ethereum → Default Base Sepolia
+    if (VAULT_CHAIN_ID === 84532) return 'sepolia'         // Vault on Base → Default Ethereum Sepolia
+    return 'sepolia' // Fallback to most stable
+  }
+  const [sourceChain, setSourceChain] = useState<'sepolia' | 'arbitrum-sepolia' | 'base-sepolia' | 'optimism-sepolia' | 'polygon-amoy'>(getDefaultSourceChain())
   const [crossChainAmount, setCrossChainAmount] = useState('')
   const [crossChainStep, setCrossChainStep] = useState<'idle' | 'switch_needed' | 'bridging' | 'bridge_complete' | 'depositing' | 'complete'>('idle')
   const [showDirectDeposit, setShowDirectDeposit] = useState(false)
