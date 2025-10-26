@@ -1382,8 +1382,9 @@ export default function Home() {
                       </button>
                     )}
                     
-                    {/* Step 1: Bridge from source chain (if not same as vault chain) */}
-                    {sourceChain !== 'arbitrum-sepolia' && crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && (
+                    {/* Step 1: Bridge from source chain (ALWAYS show if different from vault chain AND on correct chain) */}
+                    {/* ✅ FIX: Removed 'sourceChain !== arbitrum-sepolia' check - let user bridge from ANY chain! */}
+                    {crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && getChainIdForSource(sourceChain) !== VAULT_CHAIN_HEX && (
                       <BridgeButton
                         key={`bridge-${sourceChain}-${crossChainAmount || '0.1'}`} // ✅ Force remount when amount changes
                         prefill={{
