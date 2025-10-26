@@ -76,14 +76,43 @@ export default function Home() {
       ? (process.env.NEXT_PUBLIC_ETHEREUM_SEPOLIA_RPC || '')
       : (process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || '') // Default fallback
   
-  const fetchViaQuickNode = async (data: string, to: string) => {
-    const response = await fetch(QUICKNODE_RPC, {
+  // Helper to get RPC URL for any chain
+  const getRpcForChain = (chainId: string): string => {
+    switch(chainId) {
+      case '0xaa36a7': return process.env.NEXT_PUBLIC_ETHEREUM_SEPOLIA_RPC || ''
+      case '0x66eee': return process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC || ''
+      case '0x14a34': return process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || ''
+      default: return QUICKNODE_RPC // Fallback to vault's RPC
+    }
+  }
+  
+  // Generic QuickNode fetch for eth_call
+  const fetchViaQuickNode = async (data: string, to: string, chainId?: string) => {
+    const rpcUrl = chainId ? getRpcForChain(chainId) : QUICKNODE_RPC
+    const response = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: 'eth_call',
         params: [{ to, data }, 'latest'],
+        id: 1
+      })
+    })
+    const json = await response.json()
+    return json.result
+  }
+  
+  // Generic QuickNode fetch for any RPC method
+  const fetchRpcViaQuickNode = async (method: string, params: any[], chainId?: string) => {
+    const rpcUrl = chainId ? getRpcForChain(chainId) : QUICKNODE_RPC
+    const response = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method,
+        params,
         id: 1
       })
     })
@@ -287,13 +316,9 @@ export default function Home() {
       log(`Calling balanceOf for address: ${address}`)
       log(`USDC contract: ${usdcAddress} (${chainName})`)
 
-      const balanceHex = await provider.request({
-        method: 'eth_call',
-        params: [{
-          to: usdcAddress,
-          data: '0x70a08231000000000000000000000000' + address.slice(2)
-        }, 'latest']
-      })
+      // ✅ USE QUICKNODE to avoid MetaMask caching issues!
+      const balanceData = '0x70a08231000000000000000000000000' + address.slice(2)
+      const balanceHex = await fetchViaQuickNode(balanceData, usdcAddress, chainId)
 
       log(`Raw balance hex: ${balanceHex}`)
       log(`Type: ${typeof balanceHex}, Value: ${balanceHex}`)
@@ -950,10 +975,9 @@ export default function Home() {
     
     while (!confirmed && attempts < maxAttempts) {
       try {
-        const receipt = await provider.request({
-          method: 'eth_getTransactionReceipt',
-          params: [txHash]
-        })
+        // ✅ USE QUICKNODE to avoid MetaMask caching and for more reliable polling
+        // All vault transactions are on the vault's chain (Arbitrum Sepolia)
+        const receipt = await fetchRpcViaQuickNode('eth_getTransactionReceipt', [txHash])
         
         if (receipt && receipt.status) {
           confirmed = true
