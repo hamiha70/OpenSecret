@@ -1403,52 +1403,51 @@ export default function Home() {
                       >
                         {({ onClick, isLoading }) => (
                           <button
-                            onClick={async () => {
+                            onClick={(e) => {
+                              // Validation
                               if (!crossChainAmount || parseFloat(crossChainAmount) <= 0) {
                                 log('⚠️ Please enter a valid amount')
                                 setStatus('Please enter amount first')
                                 return
                               }
+                              
+                              // Log bridge initiation
                               setCrossChainStep('bridging')
-                              try {
-                                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                                log('🌍 CROSS-CHAIN DEPOSIT - STEP 1: BRIDGE')
-                                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                                const sourceChainName = sourceChain === 'arbitrum-sepolia' ? VAULT_CHAIN_NAME :
-                                                       sourceChain === 'sepolia' ? 'Ethereum Sepolia' :
-                                                       sourceChain === 'base-sepolia' ? 'Base Sepolia' :
-                                                       sourceChain === 'optimism-sepolia' ? 'Optimism Sepolia' :
-                                                       sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain
-                                log(`   Bridge: ${sourceChainName} → ${VAULT_CHAIN_NAME} (where vault is)`)
-                                log(`   Amount: ${crossChainAmount} USDC`)
-                                log('')
-                                setStatus('Opening Avail bridge...')
-                                
-                                await onClick()
-                                
-                                log('✅ Bridge widget opened!')
-                                log('📊 Track your bridge live: https://bridge.availproject.org/intents')
-                                log(`   Your address: ${address}`)
-                                
-                                if (operatorBotEnabled) {
-                                  log('🤖 Auto-deposit mode: Will detect bridge completion automatically')
-                                  log('⚠️  IMPORTANT: Complete the bridge in Avail widget first!')
-                                  log('   Bot will auto-deposit after bridge arrives (polling for 10 minutes)')
-                                  log('💡 Watch bridge progress: https://bridge.availproject.org/intents')
-                                  setStatus('Complete bridge in widget - bot will auto-deposit')
-                                  // Don't switch chains yet - let user complete bridge first
-                                  // Polling will work on any chain (uses QuickNode RPC directly)
-                                  startAutoDepositPolling()
-                                } else {
-                                  log('⏳ Complete the bridge in Avail Nexus widget')
-                                  log('   Then click "Complete Deposit" button below')
-                                  setStatus('Complete bridge, then click "Complete Deposit"')
-                                  setCrossChainStep('bridge_complete')
-                                }
-                              } catch (err: any) {
-                                log(`❌ Bridge error: ${err.message}`)
-                                setStatus(`Bridge failed: ${err.message}`)
-                                setCrossChainStep('idle')
+                              log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                              log('🌍 CROSS-CHAIN DEPOSIT - STEP 1: BRIDGE')
+                              log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                              const sourceChainName = sourceChain === 'arbitrum-sepolia' ? VAULT_CHAIN_NAME :
+                                                     sourceChain === 'sepolia' ? 'Ethereum Sepolia' :
+                                                     sourceChain === 'base-sepolia' ? 'Base Sepolia' :
+                                                     sourceChain === 'optimism-sepolia' ? 'Optimism Sepolia' :
+                                                     sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain
+                              log(`   Bridge: ${sourceChainName} → ${VAULT_CHAIN_NAME} (where vault is)`)
+                              log(`   Amount: ${crossChainAmount} USDC`)
+                              log('')
+                              setStatus('Opening Avail bridge...')
+                              
+                              // Call the BridgeButton's onClick to open widget
+                              onClick(e)
+                              
+                              // Setup polling after widget opens
+                              log('✅ Bridge widget should be opening...')
+                              log('📊 Track your bridge live: https://bridge.availproject.org/intents')
+                              log(`   Your address: ${address}`)
+                              
+                              if (operatorBotEnabled) {
+                                log('🤖 Auto-deposit mode: Will detect bridge completion automatically')
+                                log('⚠️  IMPORTANT: Complete the bridge in Avail widget first!')
+                                log('   Bot will auto-deposit after bridge arrives (polling for 10 minutes)')
+                                log('💡 Watch bridge progress: https://bridge.availproject.org/intents')
+                                setStatus('Complete bridge in widget - bot will auto-deposit')
+                                // Don't switch chains yet - let user complete bridge first
+                                // Polling will work on any chain (uses QuickNode RPC directly)
+                                startAutoDepositPolling()
+                              } else {
+                                log('⏳ Complete the bridge in Avail Nexus widget')
+                                log('   Then click "Complete Deposit" button below')
+                                setStatus('Complete bridge, then click "Complete Deposit"')
+                                setCrossChainStep('bridge_complete')
                               }
                             }}
                             disabled={isLoading || !crossChainAmount || parseFloat(crossChainAmount) <= 0}
