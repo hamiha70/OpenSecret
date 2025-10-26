@@ -113,8 +113,18 @@ async function simulateMarket() {
   if (!vault || !usdc || !wallet) return
   
   try {
-    // Get current vault balance
-    const totalAssetsRaw = await vault.totalAssets()
+    // Get current vault balance (may revert if contract not deployed or has issues)
+    let totalAssetsRaw
+    try {
+      totalAssetsRaw = await vault.totalAssets()
+    } catch (assetError: any) {
+      // Vault might not be funded yet or have initialization issues
+      if (assetError.code === 'CALL_EXCEPTION') {
+        console.log('[Market Simulator] ⚠️  Vault not ready (totalAssets() reverted), skipping simulation')
+        return
+      }
+      throw assetError
+    }
     const totalAssets = Number(ethers.formatUnits(totalAssetsRaw, 6))
     
     // Handle zero balance edge case

@@ -7,8 +7,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title AsyncVault Forked Tests
- * @notice Tests AsyncVault against real Sepolia testnet state
- * @dev Run with: forge test --match-contract AsyncVaultForkTest --fork-url $ETHEREUM_SEPOLIA_RPC -vv
+ * @notice Tests AsyncVault against real testnet state (Ethereum Sepolia OR Arbitrum Sepolia)
+ * @dev Run with:
+ *   Ethereum Sepolia: forge test --match-contract AsyncVaultForkTest --fork-url $ETHEREUM_SEPOLIA_RPC -vv
+ *   Arbitrum Sepolia: forge test --match-contract AsyncVaultForkTest --fork-url $ARBITRUM_SEPOLIA_RPC -vv
  * 
  * Tests:
  * 1. Real USDC contract interaction
@@ -16,13 +18,22 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * 3. Gas costs on real network
  * 4. Multi-user scenarios
  * 5. Profit/loss simulation
+ * 
+ * Chain Auto-Detection:
+ * - Automatically detects chain ID and uses correct USDC address
+ * - Ethereum Sepolia (11155111): 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+ * - Arbitrum Sepolia (421614): 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
  */
 contract AsyncVaultForkTest is Test {
     AsyncVault public vault;
     IERC20 public usdc;
 
-    // Real Sepolia USDC address
-    address constant SEPOLIA_USDC = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
+    // USDC addresses (auto-selected by chain ID)
+    address constant USDC_ETHEREUM_SEPOLIA = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
+    address constant USDC_ARBITRUM_SEPOLIA = 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d;
+    
+    address usdcAddress;
+    string chainName;
     
     // Test accounts (we'll load from .env)
     address deployer;
@@ -35,43 +46,85 @@ contract AsyncVaultForkTest is Test {
     uint256 constant USDC_DECIMALS = 1e6;
 
     function setUp() public {
-        // Fork Sepolia at latest block using RPC from environment
-        string memory rpcUrl = vm.envString("ETHEREUM_SEPOLIA_RPC");
+        // ═════════════════════════════════════════════════════════════════════════════
+        // STEP 1: SELECT CHAIN & RPC (same logic as deployment script)
+        // ═════════════════════════════════════════════════════════════════════════════
+        
+        // Try Arbitrum Sepolia first (default), fall back to Ethereum Sepolia
+        string memory rpcUrl;
+        try vm.envString("ARBITRUM_SEPOLIA_RPC") returns (string memory arbRpc) {
+            if (bytes(arbRpc).length > 0) {
+                rpcUrl = arbRpc;
+            } else {
+                rpcUrl = vm.envString("ETHEREUM_SEPOLIA_RPC");
+            }
+        } catch {
+            rpcUrl = vm.envString("ETHEREUM_SEPOLIA_RPC");
+        }
+        
         vm.createSelectFork(rpcUrl);
         
-        // Load real addresses from environment
+        // ═════════════════════════════════════════════════════════════════════════════
+        // STEP 2: AUTO-DETECT CHAIN ID & SELECT USDC (same logic as deployment script)
+        // ═════════════════════════════════════════════════════════════════════════════
+        
+        uint256 chainId = block.chainid;
+        
+        if (chainId == 11155111) {
+            usdcAddress = USDC_ETHEREUM_SEPOLIA;
+            chainName = "Ethereum Sepolia";
+        } else if (chainId == 421614) {
+            usdcAddress = USDC_ARBITRUM_SEPOLIA;
+            chainName = "Arbitrum Sepolia";
+        } else {
+            revert("Unsupported chain! Fork test only supports Ethereum Sepolia (11155111) or Arbitrum Sepolia (421614)");
+        }
+        
+        // ═════════════════════════════════════════════════════════════════════════════
+        // STEP 3: LOAD ACCOUNTS FROM .ENV (same as deployment script)
+        // ═════════════════════════════════════════════════════════════════════════════
+        
         deployer = vm.envAddress("DEPLOYER_ADDRESS");
-        operator = vm.envAddress("DEPLOYER_ADDRESS"); // Operator is deployer for now
+        operator = deployer; // Operator is deployer initially (same as deployment)
         simulator = vm.envAddress("SIMULATOR_ADDRESS");
-        investor1 = vm.envAddress("INVESTOR_ADDRESS");
+        investor1 = vm.envAddress("INVESTOR_ADDRESS"); // Extra for testing
         
         // Create a second investor for multi-user tests
         investor2 = makeAddr("investor2");
         
-        console.log("Fork Setup:");
-        console.log("  Deployer:", deployer);
-        console.log("  Operator:", operator);
-        console.log("  Simulator:", simulator);
-        console.log("  Investor1:", investor1);
-        console.log("  Investor2:", investor2);
+        console.log("==========================================");
+        console.log("FORK TEST SETUP:", chainName);
+        console.log("==========================================");
+        console.log("Chain ID:", chainId);
+        console.log("USDC:", usdcAddress);
+        console.log("Deployer (Owner):", deployer);
+        console.log("Operator:", operator, "(same as deployer)");
+        console.log("Simulator:", simulator);
+        console.log("Investor1:", investor1);
+        console.log("Investor2:", investor2);
+        console.log("");
         
-        // Use real Sepolia USDC
-        usdc = IERC20(SEPOLIA_USDC);
+        // ═════════════════════════════════════════════════════════════════════════════
+        // STEP 4: DEPLOY VAULT (same parameters as deployment script)
+        // ═════════════════════════════════════════════════════════════════════════════
         
-        // Deploy vault as deployer
+        usdc = IERC20(usdcAddress);
+        
         vm.startPrank(deployer);
         vault = new AsyncVault(
-            SEPOLIA_USDC,
-            operator,
-            simulator,
-            "AsyncVault USDC",
-            "asUSDC"
+            usdcAddress,   // Same USDC selection logic
+            operator,      // Same: deployer is operator initially
+            simulator,     // Same: from SIMULATOR_ADDRESS
+            "Async USDC",  // Same name
+            "asUSDC"       // Same symbol
         );
         vm.stopPrank();
         
         console.log("Vault deployed at:", address(vault));
         console.log("USDC balance of investor1:", usdc.balanceOf(investor1) / USDC_DECIMALS);
         console.log("USDC balance of simulator:", usdc.balanceOf(simulator) / USDC_DECIMALS);
+        console.log("==========================================");
+        console.log("");
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -159,7 +212,7 @@ contract AsyncVaultForkTest is Test {
         require(usdc.balanceOf(investor1) >= amount, "Investor1 needs USDC");
         
         // Give investor2 some USDC (simulate faucet)
-        deal(SEPOLIA_USDC, investor2, 10 * USDC_DECIMALS);
+        deal(usdcAddress, investor2, 10 * USDC_DECIMALS);
         
         // Both investors request deposits
         vm.startPrank(investor1);
@@ -330,7 +383,7 @@ contract AsyncVaultForkTest is Test {
         uint256 profit = 1 * USDC_DECIMALS;   // 1 USDC profit (20%)
         
         require(usdc.balanceOf(investor1) >= deposit1, "Investor1 needs USDC");
-        deal(SEPOLIA_USDC, investor2, deposit2); // Give investor2 exactly what they need
+        deal(usdcAddress, investor2, deposit2); // Give investor2 exactly what they need
         require(usdc.balanceOf(simulator) >= profit, "Simulator needs USDC");
         
         uint256 investor1InitialBalance = usdc.balanceOf(investor1);
@@ -515,7 +568,7 @@ contract AsyncVaultForkTest is Test {
         uint256 deposit2 = 2 * USDC_DECIMALS;
         
         require(usdc.balanceOf(investor1) >= deposit1, "Need USDC");
-        deal(SEPOLIA_USDC, investor2, deposit2);
+        deal(usdcAddress, investor2, deposit2);
         
         // Investor1 deposits (will self-claim)
         vm.startPrank(investor1);
@@ -566,7 +619,7 @@ contract AsyncVaultForkTest is Test {
         // Now investor2 deposits 5 USDC
         // Should get 5M shares (still 1:1 since no profit/loss)
         uint256 secondDeposit = 5 * USDC_DECIMALS;
-        deal(SEPOLIA_USDC, investor2, secondDeposit);
+        deal(usdcAddress, investor2, secondDeposit);
         
         vm.startPrank(investor2);
         usdc.approve(address(vault), secondDeposit);
@@ -612,7 +665,7 @@ contract AsyncVaultForkTest is Test {
         // Now investor2 deposits 6 USDC
         // Should get: 6 USDC / 1.5 USDC per share = 4M shares
         uint256 secondDeposit = 6 * USDC_DECIMALS;
-        deal(SEPOLIA_USDC, investor2, secondDeposit);
+        deal(usdcAddress, investor2, secondDeposit);
         
         vm.startPrank(investor2);
         usdc.approve(address(vault), secondDeposit);
@@ -654,7 +707,7 @@ contract AsyncVaultForkTest is Test {
         // Now investor2 deposits 4 USDC
         // Should get: 4 USDC / 0.8 USDC per share = 5M shares
         uint256 secondDeposit = 4 * USDC_DECIMALS;
-        deal(SEPOLIA_USDC, investor2, secondDeposit);
+        deal(usdcAddress, investor2, secondDeposit);
         
         vm.startPrank(investor2);
         usdc.approve(address(vault), secondDeposit);
@@ -697,7 +750,7 @@ contract AsyncVaultForkTest is Test {
         
         // Small investor deposits 2 USDC
         uint256 smallDeposit = 2 * USDC_DECIMALS;
-        deal(SEPOLIA_USDC, investor2, smallDeposit);
+        deal(usdcAddress, investor2, smallDeposit);
         
         vm.startPrank(investor2);
         usdc.approve(address(vault), smallDeposit);
@@ -1059,7 +1112,7 @@ contract AsyncVaultForkTest is Test {
         uint256 amount2 = 2 * USDC_DECIMALS;
         
         require(usdc.balanceOf(investor1) >= amount1, "Investor1 needs USDC");
-        deal(SEPOLIA_USDC, investor2, amount2);
+        deal(usdcAddress, investor2, amount2);
         
         // Both request deposits
         vm.startPrank(investor1);
