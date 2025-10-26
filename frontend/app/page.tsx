@@ -20,7 +20,7 @@ export default function Home() {
   const [operatorBotEnabled, setOperatorBotEnabled] = useState(false)
   
   // Cross-chain deposit state
-  const [sourceChain, setSourceChain] = useState<'sepolia' | 'arbitrum-sepolia' | 'base-sepolia'>('arbitrum-sepolia')
+  const [sourceChain, setSourceChain] = useState<'sepolia' | 'arbitrum-sepolia' | 'base-sepolia' | 'optimism-sepolia' | 'polygon-amoy'>('arbitrum-sepolia')
   const [crossChainAmount, setCrossChainAmount] = useState('')
   const [crossChainStep, setCrossChainStep] = useState<'idle' | 'bridging' | 'bridge_complete' | 'depositing' | 'complete'>('idle')
   const [showDirectDeposit, setShowDirectDeposit] = useState(false)
@@ -1373,7 +1373,9 @@ export default function Home() {
                       >
                         <option value="arbitrum-sepolia">Arbitrum Sepolia (Most Stable ✅)</option>
                         <option value="sepolia">Sepolia (Same chain, direct deposit)</option>
-                        <option value="base-sepolia">Base Sepolia (May be unstable ⚠️)</option>
+                        <option value="optimism-sepolia">Optimism Sepolia</option>
+                        <option value="polygon-amoy">Polygon Amoy Testnet</option>
+                        <option value="base-sepolia">Base Sepolia (Less stable ⚠️)</option>
                       </select>
                     </div>
                     
@@ -1396,8 +1398,11 @@ export default function Home() {
                     {sourceChain !== 'sepolia' && crossChainStep === 'idle' && (
                       <BridgeButton
                         prefill={{
-                          fromChainId: sourceChain === 'arbitrum-sepolia' ? 421614 : 84532, // Arb Sepolia or Base Sepolia
-                          toChainId: 11155111, // Sepolia
+                          fromChainId: sourceChain === 'arbitrum-sepolia' ? 421614 : 
+                                      sourceChain === 'base-sepolia' ? 84532 :
+                                      sourceChain === 'optimism-sepolia' ? 11155420 :
+                                      sourceChain === 'polygon-amoy' ? 80002 : 421614,
+                          toChainId: 11155111, // Sepolia (where vault is)
                           token: 'USDC',
                           amount: crossChainAmount || '0.1'
                         } as any}
@@ -1415,8 +1420,11 @@ export default function Home() {
                                 log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
                                 log('🌍 CROSS-CHAIN DEPOSIT - STEP 1: BRIDGE')
                                 log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                                const sourceChainName = sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' : 'Base Sepolia'
-                                log(`   Bridge: ${sourceChainName} → Sepolia`)
+                                const sourceChainName = sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' :
+                                                       sourceChain === 'base-sepolia' ? 'Base Sepolia' :
+                                                       sourceChain === 'optimism-sepolia' ? 'Optimism Sepolia' :
+                                                       sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain
+                                log(`   Bridge: ${sourceChainName} → Sepolia (where vault is)`)
                                 log(`   Amount: ${crossChainAmount} USDC`)
                                 log('')
                                 setStatus('Opening Avail bridge...')
@@ -1445,8 +1453,14 @@ export default function Home() {
                             className="w-full bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
                           >
                             {isLoading ? '⏳ Loading Bridge...' : operatorBotEnabled 
-                              ? `🤖 Bridge + Auto-Deposit from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' : 'Base Sepolia'}`
-                              : `🌉 Step 1: Bridge from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' : 'Base Sepolia'}`
+                              ? `🤖 Bridge + Auto-Deposit from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sep.' : 
+                                                                   sourceChain === 'base-sepolia' ? 'Base Sep.' :
+                                                                   sourceChain === 'optimism-sepolia' ? 'Optimism Sep.' :
+                                                                   sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain}`
+                              : `🌉 Step 1: Bridge from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sep.' :
+                                                          sourceChain === 'base-sepolia' ? 'Base Sep.' :
+                                                          sourceChain === 'optimism-sepolia' ? 'Optimism Sep.' :
+                                                          sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain}`
                             }
                           </button>
                         )}
