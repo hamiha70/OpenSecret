@@ -1226,6 +1226,15 @@ export default function Home() {
                     </ul>
                   </div>
                   
+                  <div className="p-4 bg-green-50 border-l-4 border-green-400 rounded text-sm">
+                    <p className="font-semibold text-green-800 mb-2">✅ Most Stable Routes (Tested):</p>
+                    <ul className="list-disc list-inside space-y-1 text-gray-700">
+                      <li><strong>Sepolia ↔ Arbitrum Sepolia</strong> - Recommended</li>
+                      <li><strong>Sepolia ↔ Sepolia</strong> - Also stable</li>
+                      <li>⚠️ Base Sepolia - Less stable, may fail</li>
+                    </ul>
+                  </div>
+                  
                   <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm">
                     <p className="font-semibold text-yellow-800 mb-2">⚠️ Known UI Quirks:</p>
                     <ul className="list-disc list-inside space-y-1 text-gray-700">
@@ -1310,6 +1319,21 @@ export default function Home() {
                       {depositProgress === 'claiming' && '⏳ Claiming Shares...'}
                       {depositProgress === 'success' && '✅ Deposit Complete!'}
                     </button>
+                    
+                    {/* Reset button for stuck states */}
+                    {depositProgress !== 'idle' && depositProgress !== 'success' && (
+                      <button
+                        onClick={() => {
+                          setDepositProgress('idle')
+                          setStatus('Deposit cancelled')
+                          log('🔄 Deposit flow reset by user')
+                        }}
+                        className="w-full bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 text-sm"
+                      >
+                        ❌ Cancel / Reset
+                      </button>
+                    )}
+                    
                     {depositProgress !== 'idle' && (
                       <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-sm">
                         <p className="font-semibold text-blue-900">
@@ -1369,6 +1393,21 @@ export default function Home() {
                       {redeemProgress === 'claiming' && '⏳ Claiming USDC...'}
                       {redeemProgress === 'success' && '✅ Redeem Complete!'}
                     </button>
+                    
+                    {/* Reset button for stuck states */}
+                    {redeemProgress !== 'idle' && redeemProgress !== 'success' && (
+                      <button
+                        onClick={() => {
+                          setRedeemProgress('idle')
+                          setStatus('Redeem cancelled')
+                          log('🔄 Redeem flow reset by user')
+                        }}
+                        className="w-full bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 text-sm"
+                      >
+                        ❌ Cancel / Reset
+                      </button>
+                    )}
+                    
                     {redeemProgress !== 'idle' && (
                       <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-sm">
                         <p className="font-semibold text-blue-900">
