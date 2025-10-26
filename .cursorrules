@@ -30,6 +30,27 @@
 
 ---
 
+## 🔍 BLOCKSCOUT MCP - CHAIN ID MAPPING
+
+### CRITICAL: Blockscout Uses Different Chain IDs!
+
+**When using MCP Blockscout tools, use these chain IDs:**
+
+| Network | Standard Chain ID | Blockscout Chain ID |
+|---------|------------------|---------------------|
+| Ethereum Sepolia | 11155111 | 11155111 ✅ (same) |
+| Arbitrum Sepolia | 421614 | **1500** ⚠️ (different!) |
+| Base Sepolia | 84532 | 84532 ✅ (same) |
+| Optimism Sepolia | 11155420 | 11155420 ✅ (same) |
+
+**Examples:**
+- ❌ **WRONG:** `mcp_blockscout_get_address_info(chain_id="421614", ...)`  
+- ✅ **CORRECT:** `mcp_blockscout_get_address_info(chain_id="1500", ...)`
+
+**Always use `mcp_blockscout_get_chains_list()` first if unsure!**
+
+---
+
 ## 📁 Project Structure
 
 ### Documentation Placement
