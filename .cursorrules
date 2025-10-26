@@ -29,6 +29,31 @@
   - `config/contracts.ts` - Contract addresses and chain config
   - `config/AsyncVault.abi.json` - Generated from Foundry
 
+### Frontend RPC Strategy (CRITICAL)
+- **Problem:** MetaMask aggressively caches `eth_call` responses, causing stale UI
+- **Solution:** For **critical vault balance data**, use QuickNode RPC directly via `fetch()`
+- **Implementation:**
+  ```typescript
+  const fetchViaQuickNode = async (data: string, to: string) => {
+    const response = await fetch(QUICKNODE_RPC, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{ to, data }, 'latest'],
+        id: 1
+      })
+    })
+    const json = await response.json()
+    return json.result
+  }
+  ```
+- **When to use:**
+  - ✅ Vault total USDC balance (changes from external bots)
+  - ❌ User-specific data (shares, pending deposits) - MetaMask is fine
+- **Why:** Bypasses MetaMask's caching layer entirely, always returns fresh data
+
 ## 🔧 Development Conventions
 
 ### Contract Development

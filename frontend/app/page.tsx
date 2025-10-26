@@ -13,7 +13,6 @@ export default function Home() {
   const [usdcBalance, setUsdcBalance] = useState('')
   const [vaultShares, setVaultShares] = useState('')
   const [vaultUSDCBalance, setVaultUSDCBalance] = useState('') // Total USDC in vault
-  const [lastRefresh, setLastRefresh] = useState<number>(0) // Timestamp to force re-renders
   const [pendingDeposit, setPendingDeposit] = useState('')
   const [pendingRedeem, setPendingRedeem] = useState('')
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'in_progress' | 'success' | 'failed'>('idle')
@@ -336,14 +335,29 @@ export default function Home() {
         throw new Error('No wallet address connected')
       }
 
+      // SOLUTION: Use QuickNode RPC directly to bypass MetaMask caching
+      // MetaMask aggressively caches eth_call responses, even with fresh block numbers
+      const QUICKNODE_RPC = 'https://capable-old-patina.ethereum-sepolia.quiknode.pro/19c7866bd850944b4be61fecda916d34c15658aa/'
+      
+      const fetchViaQuickNode = async (data: string, to: string) => {
+        const response = await fetch(QUICKNODE_RPC, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_call',
+            params: [{ to, data }, 'latest'],
+            id: 1
+          })
+        })
+        const json = await response.json()
+        return json.result
+      }
+      // For user-specific data (shares, pending), MetaMask is OK since it's less critical
       let provider = window.ethereum
       if (window.ethereum?.providers) {
         provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
       }
-
-      // Force fresh data by ALWAYS using 'latest' tag instead of block numbers
-      // This ensures we bypass any client-side or RPC-level caching
-      const LATEST_BLOCK = 'latest'
       
       // Get shares balance
       const sharesHex = await provider.request({
@@ -351,7 +365,7 @@ export default function Home() {
         params: [{
           to: VAULT_ADDRESS,
           data: '0x70a08231000000000000000000000000' + address.slice(2) // balanceOf(address)
-        }, LATEST_BLOCK]
+        }, 'latest']
       })
       const sharesWei = parseInt(sharesHex, 16)
       const shares = sharesWei / 1e6
@@ -364,7 +378,7 @@ export default function Home() {
         params: [{
           to: VAULT_ADDRESS,
           data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address)
-        }, LATEST_BLOCK]
+        }, 'latest']
       })
       const pendingDepositWei = parseInt(pendingDepositHex, 16)
       const pendingDep = pendingDepositWei / 1e6
@@ -381,7 +395,7 @@ export default function Home() {
         params: [{
           to: VAULT_ADDRESS,
           data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address)
-        }, LATEST_BLOCK]
+        }, 'latest']
       })
       const pendingRedeemWei = parseInt(pendingRedeemHex, 16)
       const pendingRed = pendingRedeemWei / 1e6
@@ -390,21 +404,14 @@ export default function Home() {
         log(`⏳ Pending Redeem: ${pendingRed.toFixed(6)} shares`)
       }
 
-      // Check vault's total USDC balance
-      const vaultUSDCHex = await provider.request({
-        method: 'eth_call',
-        params: [{
-          to: USDC_SEPOLIA,
-          data: '0x70a08231000000000000000000000000' + VAULT_ADDRESS.slice(2) // balanceOf(VAULT_ADDRESS)
-        }, LATEST_BLOCK]
-      })
+      // Check vault's total USDC balance using QuickNode directly (bypasses MetaMask cache)
+      const vaultUSDCData = '0x70a08231000000000000000000000000' + VAULT_ADDRESS.slice(2) // balanceOf(VAULT_ADDRESS)
+      const vaultUSDCHex = await fetchViaQuickNode(vaultUSDCData, USDC_SEPOLIA)
       const vaultUSDCWei = parseInt(vaultUSDCHex, 16)
       const vaultUSDC = vaultUSDCWei / 1e6
       setVaultUSDCBalance(vaultUSDC.toFixed(6))
       log(`💰 Vault Total USDC: ${vaultUSDC.toFixed(6)} USDC`)
 
-      // Update refresh timestamp to force UI re-render even if values didn't change
-      setLastRefresh(Date.now())
       setStatus('Vault balances loaded')
     } catch (error: any) {
       log(`❌ Vault balance error: ${error.message}`)
@@ -1267,14 +1274,7 @@ export default function Home() {
                   </div>
                   <div className="p-4 bg-white rounded-lg shadow">
                     <p className="text-sm text-gray-600">💰 Vault Total USDC</p>
-                    <p className="text-2xl font-bold text-purple-600" key={lastRefresh}>
-                      {vaultUSDCBalance || '0.000000'}
-                    </p>
-                    {lastRefresh > 0 && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Updated: {new Date(lastRefresh).toLocaleTimeString()}
-                      </p>
-                    )}
+                    <p className="text-2xl font-bold text-purple-600">{vaultUSDCBalance || '0.000000'}</p>
                   </div>
                 </div>
 
