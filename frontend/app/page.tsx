@@ -13,6 +13,7 @@ export default function Home() {
   const [usdcBalance, setUsdcBalance] = useState('')
   const [vaultShares, setVaultShares] = useState('')
   const [vaultUSDCBalance, setVaultUSDCBalance] = useState('') // Total USDC in vault
+  const [lastRefresh, setLastRefresh] = useState<number>(0) // Timestamp to force re-renders
   const [pendingDeposit, setPendingDeposit] = useState('')
   const [pendingRedeem, setPendingRedeem] = useState('')
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'in_progress' | 'success' | 'failed'>('idle')
@@ -402,6 +403,8 @@ export default function Home() {
       setVaultUSDCBalance(vaultUSDC.toFixed(6))
       log(`💰 Vault Total USDC: ${vaultUSDC.toFixed(6)} USDC`)
 
+      // Update refresh timestamp to force UI re-render even if values didn't change
+      setLastRefresh(Date.now())
       setStatus('Vault balances loaded')
     } catch (error: any) {
       log(`❌ Vault balance error: ${error.message}`)
@@ -1264,7 +1267,14 @@ export default function Home() {
                   </div>
                   <div className="p-4 bg-white rounded-lg shadow">
                     <p className="text-sm text-gray-600">💰 Vault Total USDC</p>
-                    <p className="text-2xl font-bold text-purple-600">{vaultUSDCBalance || '0.000000'}</p>
+                    <p className="text-2xl font-bold text-purple-600" key={lastRefresh}>
+                      {vaultUSDCBalance || '0.000000'}
+                    </p>
+                    {lastRefresh > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Updated: {new Date(lastRefresh).toLocaleTimeString()}
+                      </p>
+                    )}
                   </div>
                 </div>
 

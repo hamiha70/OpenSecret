@@ -18,6 +18,10 @@ let wallet: ethers.Wallet | null = null
 let vault: ethers.Contract | null = null
 let usdc: ethers.Contract | null = null
 
+// Transaction queue to prevent nonce collisions
+let txQueue: Promise<any> = Promise.resolve()
+let isProcessing = false
+
 // Configuration - Geometric Brownian Motion Parameters
 const VAULT_ADDRESS = process.env.ASYNCVAULT_ADDRESS || process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS
 const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Sepolia USDC
@@ -300,16 +304,35 @@ export async function POST(request: NextRequest) {
     }
     
     if (action === 'trigger') {
+      // Check if already processing a transaction
+      if (isProcessing) {
+        return NextResponse.json({ 
+          status: 'busy',
+          message: 'Transaction in progress, please wait...' 
+        }, { status: 429 })
+      }
+      
       // Manual trigger for testing
       if (!wallet || !vault || !usdc) {
         await initializeSimulator()
       }
-      await simulateMarket()
       
-      return NextResponse.json({
-        status: 'triggered',
-        message: 'Market event triggered manually'
+      // Queue the transaction to prevent nonce collisions
+      isProcessing = true
+      const result = await txQueue.then(async () => {
+        try {
+          await simulateMarket()
+          return { status: 'triggered', message: 'Market event triggered manually' }
+        } finally {
+          isProcessing = false
+        }
+      }).catch((error) => {
+        console.error('[Market Simulator] Queue error:', error.message)
+        isProcessing = false
+        throw error
       })
+      
+      return NextResponse.json(result)
     }
     
     return NextResponse.json({
