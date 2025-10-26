@@ -149,6 +149,11 @@ export default function Home() {
         log(`🔄 Chain changed to: ${newChainId}`)
         setCurrentChainId(newChainId)
       })
+      
+      // ✅ AUTO-LOAD vault balances after connecting (works regardless of current chain!)
+      setTimeout(() => {
+        checkVaultBalances()
+      }, 500) // Small delay to ensure state is updated
 
     } catch (error: any) {
       log(`❌ Error: ${error.message}`)
@@ -326,33 +331,20 @@ export default function Home() {
         throw new Error('No wallet address connected')
       }
 
-      // For user-specific data, we conditionally use QuickNode in bot mode
-      let provider = window.ethereum
-      if (window.ethereum?.providers) {
-        provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
-      }
+      // ✅ CRITICAL FIX: ALWAYS use QuickNode for vault data (works regardless of user's current chain!)
+      // The vault is on Arbitrum Sepolia, but user might be on Ethereum Sepolia for bridging
       
-      // Get shares balance (use QuickNode for fresh data in bot mode)
+      // Get shares balance - ALWAYS via QuickNode to vault's chain
       const sharesData = '0x70a08231000000000000000000000000' + address.slice(2) // balanceOf(address)
-      const sharesHex = operatorBotEnabled
-        ? await fetchViaQuickNode(sharesData, VAULT_ADDRESS)
-        : await provider.request({
-            method: 'eth_call',
-            params: [{ to: VAULT_ADDRESS, data: sharesData }, 'latest']
-          })
+      const sharesHex = await fetchViaQuickNode(sharesData, VAULT_ADDRESS)
       const sharesWei = parseInt(sharesHex, 16)
       const shares = sharesWei / 1e6
       setVaultShares(shares.toFixed(6))
       log(`✅ Vault Shares: ${shares.toFixed(6)} ovUSDC`)
 
-      // Check pending deposit (use QuickNode for fresh data in bot mode)
+      // Check pending deposit - ALWAYS via QuickNode to vault's chain
       const pendingDepositData = '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address)
-      const pendingDepositHex = operatorBotEnabled 
-        ? await fetchViaQuickNode(pendingDepositData, VAULT_ADDRESS)
-        : await provider.request({
-            method: 'eth_call',
-            params: [{ to: VAULT_ADDRESS, data: pendingDepositData }, 'latest']
-          })
+      const pendingDepositHex = await fetchViaQuickNode(pendingDepositData, VAULT_ADDRESS)
       const pendingDepositWei = parseInt(pendingDepositHex, 16)
       const pendingDep = pendingDepositWei / 1e6
       setPendingDeposit(pendingDep > 0 ? pendingDep.toFixed(6) : '')
@@ -362,14 +354,9 @@ export default function Home() {
         log(`✅ No pending deposit`)
       }
 
-      // Check pending redeem (use QuickNode for fresh data in bot mode)
+      // Check pending redeem - ALWAYS via QuickNode to vault's chain
       const pendingRedeemData = '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address)
-      const pendingRedeemHex = operatorBotEnabled
-        ? await fetchViaQuickNode(pendingRedeemData, VAULT_ADDRESS)
-        : await provider.request({
-            method: 'eth_call',
-            params: [{ to: VAULT_ADDRESS, data: pendingRedeemData }, 'latest']
-          })
+      const pendingRedeemHex = await fetchViaQuickNode(pendingRedeemData, VAULT_ADDRESS)
       const pendingRedeemWei = parseInt(pendingRedeemHex, 16)
       const pendingRed = pendingRedeemWei / 1e6
       setPendingRedeem(pendingRed > 0 ? pendingRed.toFixed(6) : '')
