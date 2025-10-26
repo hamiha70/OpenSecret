@@ -1,5 +1,35 @@
 # AsyncVault Project Rules for Cursor AI
 
+## 🔒 SECURITY - CRITICAL RULES
+
+### NEVER Commit Sensitive Data
+- ❌ **NEVER** include full RPC URLs with API keys in documentation files
+- ❌ **NEVER** commit QuickNode URLs like `https://xxx.quiknode.pro/APIKEY/`
+- ❌ **NEVER** commit private keys, API keys, or secrets in any file
+- ✅ **ALWAYS** use placeholders like `<your-rpc-url>` or `$RPC_URL` in docs
+- ✅ **ALWAYS** use environment variables for sensitive data
+- ✅ **ALWAYS** truncate URLs with `...` in example code (e.g., `.quiknode.pro/...`)
+
+**QuickNode is a paid service with API keys that MUST NOT be exposed!**
+
+**Examples:**
+- ❌ BAD: `ARBITRUM_SEPOLIA_RPC=https://snowy-cold-shape.arbitrum-sepolia.quiknode.pro/b6e70011263de6b0ff88303b0105a0ff56450586/`
+- ✅ GOOD: `ARBITRUM_SEPOLIA_RPC=<your-arbitrum-sepolia-rpc-url>`
+- ✅ GOOD: `const RPC = process.env.ARBITRUM_SEPOLIA_RPC`
+
+### Files That Should NEVER Have Secrets
+- All `/docs/*.md` files
+- All source code files (`.ts`, `.js`, `.tsx`, `.sol`)
+- `README.md`
+- Any file that gets committed to git
+
+### Files Where Secrets Are OK (BUT MUST BE IN .gitignore)
+- `.env` (MUST be in `.gitignore`)
+- `.env.local` (MUST be in `.gitignore`)
+- `cache/` directories
+
+---
+
 ## 📁 Project Structure
 
 ### Documentation Placement
