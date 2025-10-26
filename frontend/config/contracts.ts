@@ -2,7 +2,7 @@
  * Contract addresses and configuration
  */
 
-// Validate required environment variable (FAIL FAST)
+// Validate required environment variables (FAIL FAST)
 if (!process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS) {
   throw new Error(
     'NEXT_PUBLIC_ASYNCVAULT_ADDRESS is not set in .env\n' +
@@ -10,11 +10,23 @@ if (!process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS) {
   )
 }
 
+if (!process.env.NEXT_PUBLIC_VAULT_CHAIN_ID) {
+  throw new Error(
+    'NEXT_PUBLIC_VAULT_CHAIN_ID is not set in .env\n' +
+    'Please add: NEXT_PUBLIC_VAULT_CHAIN_ID=421614 (for Arbitrum Sepolia) or 11155111 (for Sepolia)'
+  )
+}
+
+// Vault chain configuration
+export const VAULT_CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_VAULT_CHAIN_ID)
+export const VAULT_CHAIN_NAME = process.env.NEXT_PUBLIC_VAULT_CHAIN_NAME || 'Unknown Chain'
+export const VAULT_CHAIN_HEX = `0x${VAULT_CHAIN_ID.toString(16)}` as `0x${string}`
+
 export const CONTRACTS = {
-  // AsyncVault deployed on Arbitrum Sepolia (ERC4626 + Centrifuge pattern + operator)
+  // AsyncVault - chain configurable via .env for easy switching
   vault: {
     address: process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS as `0x${string}`,
-    chainId: 421614, // Arbitrum Sepolia
+    chainId: VAULT_CHAIN_ID, // Configurable: 421614 (Arbitrum Sepolia) or 11155111 (Sepolia)
   },
   
   // USDC on multiple testnets (Circle's official deployments)
