@@ -41,7 +41,16 @@ export default function Home() {
   const USDC_BASE_SEPOLIA = CONTRACTS.usdc.baseSepolia // Base Sepolia (best for Avail)
   const USDC_ARB_SEPOLIA = CONTRACTS.usdc.arbitrumSepolia
   const VAULT_ADDRESS = CONTRACTS.vault.address
-  const AVAIL_BRIDGE_ADDRESS = '0x0000000000000000000000000000000000000000' // TODO: Update in Phase 3
+  // Avail Nexus bridge addresses per chain (for USDC approvals)
+  // These are the Avail Nexus router addresses that handle cross-chain bridging
+  const AVAIL_BRIDGE_ADDRESSES: Record<string, string> = {
+    'arbitrum-sepolia': '0x0000000000000000000000000000000000000000', // TODO: Get from Avail docs
+    'base-sepolia': '0x0000000000000000000000000000000000000000', // TODO: Get from Avail docs
+    'optimism-sepolia': '0x0000000000000000000000000000000000000000', // TODO: Get from Avail docs
+    'sepolia': '0x0000000000000000000000000000000000000000', // TODO: Get from Avail docs
+  }
+  
+  const AVAIL_BRIDGE_ADDRESS = AVAIL_BRIDGE_ADDRESSES[sourceChain] || '0x0000000000000000000000000000000000000000'
   
   // Automatically select correct USDC address based on vault chain
   const getVaultChainUSDC = () => {
