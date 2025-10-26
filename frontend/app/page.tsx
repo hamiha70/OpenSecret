@@ -20,7 +20,7 @@ export default function Home() {
   const [operatorBotEnabled, setOperatorBotEnabled] = useState(false)
   
   // Cross-chain deposit state
-  const [sourceChain, setSourceChain] = useState<'sepolia' | 'arbitrum-sepolia' | 'base-sepolia' | 'optimism-sepolia' | 'polygon-amoy'>('arbitrum-sepolia')
+  const [sourceChain, setSourceChain] = useState<'sepolia' | 'arbitrum-sepolia' | 'base-sepolia' | 'optimism-sepolia' | 'polygon-amoy'>('sepolia') // ✅ Default to Sepolia (cross-chain) instead of Arbitrum Sepolia (same-chain)
   const [crossChainAmount, setCrossChainAmount] = useState('')
   const [crossChainStep, setCrossChainStep] = useState<'idle' | 'switch_needed' | 'bridging' | 'bridge_complete' | 'depositing' | 'complete'>('idle')
   const [showDirectDeposit, setShowDirectDeposit] = useState(false)
