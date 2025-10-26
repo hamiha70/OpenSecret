@@ -1411,12 +1411,16 @@ export default function Home() {
                       const isOnSourceChain = currentChainId === getChainIdForSource(sourceChain)
                       const isDifferentFromVault = getChainIdForSource(sourceChain) !== VAULT_CHAIN_HEX
                       
-                      // While bridging, keep button mounted regardless of current chain (Avail switches chains internally)
-                      const shouldShow = crossChainStep === 'bridging' 
-                        ? isDifferentFromVault  // During bridging: only check it's a cross-chain operation
-                        : (crossChainStep === 'idle' && isOnSourceChain && isDifferentFromVault)  // While idle: check we're on correct chain
+                      // Keep button mounted for idle, bridging, AND bridge_complete states!
+                      // The Avail widget stays open through all these states and handles chain switching
+                      const shouldShow = (crossChainStep === 'idle' || crossChainStep === 'bridging' || crossChainStep === 'bridge_complete')
+                        ? (crossChainStep === 'idle' 
+                            ? (isOnSourceChain && isDifferentFromVault)  // Idle: must be on source chain
+                            : isDifferentFromVault)  // Bridging/Complete: ignore chain, Avail handles it
+                        : false  // Other states: hide button
                       
-                      console.log('🔍 BridgeButton render check:', {
+                      // Log to BOTH console and UI log panel for debugging
+                      const debugInfo = {
                         crossChainStep,
                         currentChainId,
                         sourceChain,
@@ -1425,7 +1429,14 @@ export default function Home() {
                         isOnSourceChain,
                         isDifferentFromVault,
                         shouldShow
-                      })
+                      }
+                      console.log('🔍 BridgeButton render check:', debugInfo)
+                      
+                      // Also log to UI if chain changes during bridging
+                      if (crossChainStep === 'bridging' && !isOnSourceChain) {
+                        log(`🔍 Chain changed during bridging: ${currentChainId} (was ${getChainIdForSource(sourceChain)}) - BridgeButton shouldShow: ${shouldShow}`)
+                      }
+                      
                       return shouldShow
                     })() && (
                       <BridgeButton
@@ -1489,10 +1500,11 @@ export default function Home() {
                                   setCrossChainStep('idle')
                                 }
                               }}
-                              disabled={isLoading || crossChainStep === 'bridging' || !crossChainAmount || parseFloat(crossChainAmount) <= 0}
+                              disabled={isLoading || crossChainStep === 'bridging' || crossChainStep === 'bridge_complete' || !crossChainAmount || parseFloat(crossChainAmount) <= 0}
                               className="w-full bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
                             >
-                              {crossChainStep === 'bridging' ? '⏳ Complete bridge in widget...' :
+                              {crossChainStep === 'bridge_complete' ? '✅ Bridge complete! Click "Complete Deposit" below' :
+                               crossChainStep === 'bridging' ? '⏳ Complete bridge in widget...' :
                                isLoading ? '⏳ Loading Bridge...' : operatorBotEnabled 
                                 ? `🤖 Bridge + Auto-Deposit from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sep.' : 
                                                                      sourceChain === 'base-sepolia' ? 'Base Sep.' :
