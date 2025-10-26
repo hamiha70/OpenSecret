@@ -1392,7 +1392,18 @@ export default function Home() {
                     
                     {/* Step 1: Bridge from source chain (ALWAYS show if different from vault chain AND on correct chain) */}
                     {/* ✅ FIX: Removed 'sourceChain !== arbitrum-sepolia' check - let user bridge from ANY chain! */}
-                    {crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && getChainIdForSource(sourceChain) !== VAULT_CHAIN_HEX && (
+                    {(() => {
+                      const shouldShow = crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && getChainIdForSource(sourceChain) !== VAULT_CHAIN_HEX
+                      console.log('🔍 BridgeButton render check:', {
+                        crossChainStep,
+                        currentChainId,
+                        sourceChain,
+                        sourceChainId: getChainIdForSource(sourceChain),
+                        vaultChainHex: VAULT_CHAIN_HEX,
+                        shouldShow
+                      })
+                      return shouldShow
+                    })() && (
                       <BridgeButton
                         key={`bridge-${sourceChain}-${crossChainAmount || '0.1'}`} // ✅ Force remount when amount changes
                         prefill={{
@@ -1432,7 +1443,11 @@ export default function Home() {
                                   log(`   Your address: ${address}`)
                                   setStatus('Opening Avail bridge...')
                                   
-                                  await onClick()
+                                  log('🔍 DEBUG: Calling onClick()...')
+                                  log(`🔍 DEBUG: onClick type: ${typeof onClick}`)
+                                  log(`🔍 DEBUG: isLoading: ${isLoading}`)
+                                  const result = await onClick()
+                                  log(`🔍 DEBUG: onClick returned: ${JSON.stringify(result)}`)
                                   
                                   log('✅ Widget opened - complete the bridge transaction')
                                   if (operatorBotEnabled) {
