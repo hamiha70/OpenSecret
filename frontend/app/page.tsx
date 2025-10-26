@@ -1397,52 +1397,50 @@ export default function Home() {
                           amount: crossChainAmount || '0.1'
                         } as any}
                       >
-                        {({ onClick, isLoading }) => {
-                          // Validation wrapper
-                          const handleClick = () => {
-                            if (!crossChainAmount || parseFloat(crossChainAmount) <= 0) {
-                              log('⚠️ Please enter a valid amount')
-                              setStatus('Please enter amount first')
-                              return
-                            }
-                            
-                            // Log BEFORE opening widget
-                            setCrossChainStep('bridging')
-                            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                            log('🌍 CROSS-CHAIN DEPOSIT - STEP 1: BRIDGE')
-                            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                            const sourceChainName = sourceChain === 'arbitrum-sepolia' ? VAULT_CHAIN_NAME :
-                                                   sourceChain === 'sepolia' ? 'Ethereum Sepolia' :
-                                                   sourceChain === 'base-sepolia' ? 'Base Sepolia' :
-                                                   sourceChain === 'optimism-sepolia' ? 'Optimism Sepolia' :
-                                                   sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain
-                            log(`   Bridge: ${sourceChainName} → ${VAULT_CHAIN_NAME} (where vault is)`)
-                            log(`   Amount: ${crossChainAmount} USDC`)
-                            log('📊 Track live: https://bridge.availproject.org/intents')
-                            log(`   Your address: ${address}`)
-                            setStatus('Opening Avail bridge...')
-                            
-                            // Open the widget by calling onClick directly
-                            onClick()
-                            
-                            // Setup polling immediately after (widget opens async)
-                            setTimeout(() => {
-                              log('✅ Widget opened - complete the bridge transaction')
-                              if (operatorBotEnabled) {
-                                log('🤖 Bot will auto-deposit after bridge completes (polling 10 min)')
-                                setStatus('Complete bridge - bot will auto-deposit')
-                                startAutoDepositPolling()
-                              } else {
-                                log('⏳ Complete bridge, then click "Complete Deposit"')
-                                setStatus('Complete bridge, then click button below')
-                                setCrossChainStep('bridge_complete')
-                              }
-                            }, 100) // Small delay to let widget mount
-                          }
-                          
-                          return (
+                        {({ onClick, isLoading }) => (
                             <button
-                              onClick={handleClick}
+                              onClick={async () => {
+                                // Validation
+                                if (!crossChainAmount || parseFloat(crossChainAmount) <= 0) {
+                                  log('⚠️ Please enter a valid amount')
+                                  setStatus('Please enter amount first')
+                                  return
+                                }
+                                
+                                setCrossChainStep('bridging')
+                                try {
+                                  log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                                  log('🌍 CROSS-CHAIN DEPOSIT - STEP 1: BRIDGE')
+                                  log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                                  const sourceChainName = sourceChain === 'arbitrum-sepolia' ? VAULT_CHAIN_NAME :
+                                                         sourceChain === 'sepolia' ? 'Ethereum Sepolia' :
+                                                         sourceChain === 'base-sepolia' ? 'Base Sepolia' :
+                                                         sourceChain === 'optimism-sepolia' ? 'Optimism Sepolia' :
+                                                         sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain
+                                  log(`   Bridge: ${sourceChainName} → ${VAULT_CHAIN_NAME} (where vault is)`)
+                                  log(`   Amount: ${crossChainAmount} USDC`)
+                                  log('📊 Track live: https://bridge.availproject.org/intents')
+                                  log(`   Your address: ${address}`)
+                                  setStatus('Opening Avail bridge...')
+                                  
+                                  await onClick()
+                                  
+                                  log('✅ Widget opened - complete the bridge transaction')
+                                  if (operatorBotEnabled) {
+                                    log('🤖 Bot will auto-deposit after bridge completes (polling 10 min)')
+                                    setStatus('Complete bridge - bot will auto-deposit')
+                                    startAutoDepositPolling()
+                                  } else {
+                                    log('⏳ Complete bridge, then click "Complete Deposit"')
+                                    setStatus('Complete bridge, then click button below')
+                                    setCrossChainStep('bridge_complete')
+                                  }
+                                } catch (err: any) {
+                                  log(`❌ Bridge error: ${err.message}`)
+                                  setStatus(`Bridge failed: ${err.message}`)
+                                  setCrossChainStep('idle')
+                                }
+                              }}
                               disabled={isLoading || !crossChainAmount || parseFloat(crossChainAmount) <= 0}
                               className="w-full bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
                             >
@@ -1457,8 +1455,7 @@ export default function Home() {
                                                             sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain}`
                               }
                             </button>
-                          )
-                        }}
+                        )}
                       </BridgeButton>
                     )}
                     
