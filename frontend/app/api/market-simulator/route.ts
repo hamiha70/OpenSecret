@@ -138,18 +138,21 @@ async function simulateMarket() {
       deltaUSDC = Math.max(deltaUSDC, -totalAssets)
     }
     
-    // Skip if delta is too small (less than 0.001 USDC)
-    if (Math.abs(deltaUSDC) < 0.001) {
-      console.log(`[Market Simulator] ⏭️  Delta too small (${deltaUSDC.toFixed(6)} USDC), skipping`)
+    // Convert to wei (USDC has 6 decimals)
+    // Round to nearest wei to avoid floating point issues
+    const amountWei = BigInt(Math.round(Math.abs(deltaUSDC) * 1e6))
+    
+    // Skip if amount rounds to 0 wei
+    if (amountWei === 0n) {
+      console.log(`[Market Simulator] ⏭️  Amount rounds to 0 wei (${deltaUSDC.toFixed(9)} USDC), skipping`)
       return
     }
     
-    const amountWei = ethers.parseUnits(Math.abs(deltaUSDC).toFixed(6), 6)
     const isProfit = deltaUSDC > 0
+    console.log(`[Market Simulator] 🎲 ${isProfit ? '📈 PROFIT' : '📉 LOSS'}: ${ethers.formatUnits(amountWei, 6)} USDC (${(relProfit * 100).toFixed(4)}%)`)
     
     if (isProfit) {
       // Realize profit: Transfer USDC from simulator to vault
-      console.log(`[Market Simulator] 📈 PROFIT: ${Math.abs(deltaUSDC).toFixed(6)} USDC (+${(relProfit * 100).toFixed(4)}%)`)
       
       // Check simulator balance
       const balance = await usdc.balanceOf(wallet.address)
@@ -179,7 +182,6 @@ async function simulateMarket() {
       }
     } else {
       // Realize loss: Transfer USDC from vault to simulator
-      console.log(`[Market Simulator] 📉 LOSS: ${Math.abs(deltaUSDC).toFixed(6)} USDC (${(relProfit * 100).toFixed(4)}%)`)
       console.log(`[Market Simulator] 💰 Vault balance before: ${totalAssets.toFixed(6)} USDC`)
       
       // Call realizeLoss on vault (only owner can call this)

@@ -340,34 +340,30 @@ export default function Home() {
         provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
       }
 
-      // Force fresh data by getting latest block EVERY TIME (cache-busting)
-      // DO NOT reuse block number - fetch it fresh for each call to prevent RPC caching
-      const getLatestBlock = async () => {
-        return await provider.request({ method: 'eth_blockNumber', params: [] })
-      }
+      // Force fresh data by ALWAYS using 'latest' tag instead of block numbers
+      // This ensures we bypass any client-side or RPC-level caching
+      const LATEST_BLOCK = 'latest'
       
-      // Get shares balance - fetch fresh block number
-      const sharesBlock = await getLatestBlock()
+      // Get shares balance
       const sharesHex = await provider.request({
         method: 'eth_call',
         params: [{
           to: VAULT_ADDRESS,
           data: '0x70a08231000000000000000000000000' + address.slice(2) // balanceOf(address)
-        }, sharesBlock]
+        }, LATEST_BLOCK]
       })
       const sharesWei = parseInt(sharesHex, 16)
       const shares = sharesWei / 1e6
       setVaultShares(shares.toFixed(6))
       log(`✅ Vault Shares: ${shares.toFixed(6)} ovUSDC`)
 
-      // Check pending deposit - fetch fresh block number separately
-      const depositBlock = await getLatestBlock()
+      // Check pending deposit
       const pendingDepositHex = await provider.request({
         method: 'eth_call',
         params: [{
           to: VAULT_ADDRESS,
-          data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address) - FIXED
-        }, depositBlock]
+          data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address)
+        }, LATEST_BLOCK]
       })
       const pendingDepositWei = parseInt(pendingDepositHex, 16)
       const pendingDep = pendingDepositWei / 1e6
@@ -378,14 +374,13 @@ export default function Home() {
         log(`✅ No pending deposit`)
       }
 
-      // Check pending redeem - fetch fresh block number separately
-      const redeemBlock = await getLatestBlock()
+      // Check pending redeem
       const pendingRedeemHex = await provider.request({
         method: 'eth_call',
         params: [{
           to: VAULT_ADDRESS,
-          data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address) - FIXED
-        }, redeemBlock]
+          data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address)
+        }, LATEST_BLOCK]
       })
       const pendingRedeemWei = parseInt(pendingRedeemHex, 16)
       const pendingRed = pendingRedeemWei / 1e6
@@ -394,14 +389,13 @@ export default function Home() {
         log(`⏳ Pending Redeem: ${pendingRed.toFixed(6)} shares`)
       }
 
-      // Check vault's total USDC balance - fetch fresh block number separately
-      const vaultUSDCBlock = await getLatestBlock()
+      // Check vault's total USDC balance
       const vaultUSDCHex = await provider.request({
         method: 'eth_call',
         params: [{
           to: USDC_SEPOLIA,
           data: '0x70a08231000000000000000000000000' + VAULT_ADDRESS.slice(2) // balanceOf(VAULT_ADDRESS)
-        }, vaultUSDCBlock]
+        }, LATEST_BLOCK]
       })
       const vaultUSDCWei = parseInt(vaultUSDCHex, 16)
       const vaultUSDC = vaultUSDCWei / 1e6
@@ -563,14 +557,13 @@ export default function Home() {
           provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
         }
 
-        // Force fresh data by fetching latest block number (cache-busting)
-        const latestBlock = await provider.request({ method: 'eth_blockNumber', params: [] })
+        // Force fresh data by using 'latest' tag (cache-busting)
         const pendingHex = await provider.request({
           method: 'eth_call',
           params: [{
             to: VAULT_ADDRESS,
-            data: '0xc3702989000000000000000000000000' + address.slice(2) // FIXED SELECTOR
-          }, latestBlock]
+            data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest
+          }, 'latest']
         })
         const pending = parseInt(pendingHex, 16) / 1e6
 
@@ -756,14 +749,13 @@ export default function Home() {
           provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
         }
 
-        // Force fresh data by fetching latest block number (cache-busting)
-        const latestBlock = await provider.request({ method: 'eth_blockNumber', params: [] })
+        // Force fresh data by using 'latest' tag (cache-busting)
         const pendingHex = await provider.request({
           method: 'eth_call',
           params: [{
             to: VAULT_ADDRESS,
-            data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // FIXED SELECTOR
-          }, latestBlock]
+            data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest
+          }, 'latest']
         })
         const pending = parseInt(pendingHex, 16) / 1e6
 
