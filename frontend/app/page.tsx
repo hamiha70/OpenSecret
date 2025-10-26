@@ -253,24 +253,39 @@ export default function Home() {
         provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
       }
 
-      // Check current network (but DON'T auto-switch - user may be on different chain for cross-chain deposits!)
+      // Check current network and query USDC balance on THAT chain (not vault chain!)
       const chainId = await provider.request({ method: 'eth_chainId' })
       log(`Current chain ID: ${chainId}`)
       
-      if (chainId !== VAULT_CHAIN_HEX) {
-        log(`⚠️ Note: You're on ${chainId}, but vault is on ${VAULT_CHAIN_NAME} (${VAULT_CHAIN_HEX})`)
-        log(`   This is OK for cross-chain deposits!`)
-        // ❌ REMOVED: Auto-switch logic that was breaking Avail widget
-        // The old code would force switch to vault chain, interrupting bridge flow
+      // ✅ Select correct USDC address based on CURRENT chain (not vault chain!)
+      let usdcAddress: string
+      let chainName: string
+      switch(chainId) {
+        case '0xaa36a7': // Ethereum Sepolia
+          usdcAddress = USDC_SEPOLIA
+          chainName = 'Ethereum Sepolia'
+          break
+        case '0x66eee': // Arbitrum Sepolia (421614)
+          usdcAddress = USDC_ARB_SEPOLIA
+          chainName = 'Arbitrum Sepolia'
+          break
+        case '0x14a34': // Base Sepolia (84532)
+          usdcAddress = USDC_BASE_SEPOLIA
+          chainName = 'Base Sepolia'
+          break
+        default:
+          log(`⚠️ Unknown chain: ${chainId}, defaulting to Arbitrum Sepolia USDC`)
+          usdcAddress = USDC_ARB_SEPOLIA
+          chainName = 'Unknown Chain'
       }
 
       log(`Calling balanceOf for address: ${address}`)
-      log(`USDC contract: ${VAULT_USDC_ADDRESS} (${VAULT_CHAIN_NAME})`)
+      log(`USDC contract: ${usdcAddress} (${chainName})`)
 
       const balanceHex = await provider.request({
         method: 'eth_call',
         params: [{
-          to: VAULT_USDC_ADDRESS,
+          to: usdcAddress,
           data: '0x70a08231000000000000000000000000' + address.slice(2)
         }, 'latest']
       })
@@ -1295,7 +1310,7 @@ export default function Home() {
               Deposit USDC into the vault to earn yield, or redeem your shares back to USDC!
             </p>
 
-            {connected && usdcBalance ? (
+            {connected ? (
               <div className="space-y-6">
                 {/* Balances */}
                 <div className="grid grid-cols-3 gap-4">
