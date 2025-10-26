@@ -1419,9 +1419,11 @@ export default function Home() {
                                 
                                 if (operatorBotEnabled) {
                                   log('🤖 Auto-deposit mode: Will detect bridge completion automatically')
-                                  setStatus('Complete bridge - will auto-deposit when done')
-                                  // Switch back to Arbitrum Sepolia for polling
-                                  await switchToChain(VAULT_CHAIN_HEX, VAULT_CHAIN_NAME)
+                                  log('⚠️  IMPORTANT: Complete the bridge in Avail widget first!')
+                                  log('   Bot will auto-deposit after bridge arrives (polling for 3 minutes)')
+                                  setStatus('Complete bridge in widget - bot will auto-deposit')
+                                  // Don't switch chains yet - let user complete bridge first
+                                  // Polling will work on any chain (uses QuickNode RPC directly)
                                   startAutoDepositPolling()
                                 } else {
                                   log('⏳ Complete the bridge in Avail Nexus widget')
