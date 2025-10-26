@@ -1275,117 +1275,7 @@ export default function Home() {
             )}
           </div>
 
-          {/* Step 3: Avail Bridge */}
-          <div className="border rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Step 3: Bridge with Avail Nexus</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Click the button below to open Avail Nexus bridge and transfer USDC across chains!
-            </p>
-            
-            {connected && usdcBalance ? (
-              <div className="space-y-4">
-                <BridgeButton
-                  prefill={{
-                    fromChainId: 11155111, // Arbitrum Sepolia
-                    toChainId: 421614, // Arbitrum Sepolia (corrected chain ID)
-                    token: 'USDC', // USDC is officially supported!
-                    amount: '0.1' // Start with small test amount
-                  } as any}
-                >
-                  {({ onClick, isLoading }) => (
-                    <button
-                      onClick={async () => {
-                        setBridgeStatus('in_progress')
-                        try {
-                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                          log('🌉 STARTING AVAIL BRIDGE TRANSACTION')
-                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                          log('📊 Bridge Config:')
-                          log('   • From: Arbitrum Sepolia (11155111)')
-                          log('   • To: Arbitrum Sepolia (421614)')
-                          log('   • Token: USDC (officially supported)')
-                          log('   • Amount: 0.1 USDC')
-                          log('   • Total USDC: ' + usdcBalance + ' available')
-                          log('')
-                          log('🔄 Opening Avail Nexus widget...')
-                          setStatus('Opening Avail bridge...')
-                          
-                          await onClick()
-                          
-                          log('✅ Bridge widget opened successfully!')
-                          log('📝 Next steps in widget:')
-                          log('   1. ✅ Sign message to enable Nexus')
-                          log('   2. ⏳ Approve USDC token allowance')
-                          log('   3. ⏳ Set spending cap')
-                          log('   4. ⏳ Confirm bridge transaction')
-                          log('')
-                          log('⏳ Waiting for user actions in MetaMask...')
-                          log('   • Watch MetaMask for popups!')
-                          log('   • Do not cancel transactions')
-                          log('   • Each step needs approval')
-                          setStatus('Waiting for MetaMask approvals...')
-                          
-                          // Note: We can't detect completion here as the onClick doesn't return transaction status
-                          // The bridge continues in the background through the Nexus widget
-                        } catch (err: any) {
-                          setBridgeStatus('failed')
-                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                          log(`❌ BRIDGE ERROR: ${err.message}`)
-                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                          if (err.stack) {
-                            log(`Stack: ${err.stack}`)
-                          }
-                          setStatus(`Bridge failed: ${err.message}`)
-                        }
-                      }}
-                      disabled={isLoading}
-                      className="bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
-                    >
-                      {isLoading ? '⏳ Loading Bridge...' : '🌉 Bridge USDC with Avail Nexus'}
-                    </button>
-                  )}
-                </BridgeButton>
-                
-                <div className="space-y-3">
-                  <div className="p-4 bg-blue-50 rounded text-sm">
-                    <p className="font-semibold mb-2">💡 Bridge Tips:</p>
-                    <ul className="list-disc list-inside space-y-1 text-gray-700">
-                      <li>Current USDC balance: {usdcBalance} on Arbitrum Sepolia</li>
-                      <li>Test amount: 0.1 USDC (you can change this)</li>
-                      <li>Destination: Arbitrum Sepolia (chain ID 421614)</li>
-                      <li>✅ USDC is officially supported by Avail (PYUSD is not)</li>
-                      <li>Avail Nexus aggregates liquidity across chains</li>
-                    </ul>
-                  </div>
-                  
-                  <div className="p-4 bg-green-50 border-l-4 border-green-400 rounded text-sm">
-                    <p className="font-semibold text-green-800 mb-2">✅ Most Stable Routes (Tested):</p>
-                    <ul className="list-disc list-inside space-y-1 text-gray-700">
-                      <li><strong>Arbitrum Sepolia ↔ Arbitrum Sepolia</strong> - Recommended</li>
-                      <li><strong>Arbitrum Sepolia ↔ Arbitrum Sepolia</strong> - Also stable</li>
-                      <li>⚠️ Base Sepolia - Less stable, may fail</li>
-                    </ul>
-                  </div>
-                  
-                  <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm">
-                    <p className="font-semibold text-yellow-800 mb-2">⚠️ Known UI Quirks:</p>
-                    <ul className="list-disc list-inside space-y-1 text-gray-700">
-                      <li><strong>MetaMask may show "Ethereum Mainnet"</strong> during sign-in - this is cosmetic, you're actually on Arbitrum Sepolia</li>
-                      <li><strong>Transaction steps:</strong> Sign-in → Token Allowance → Spending Cap → Bridge TX</li>
-                      <li><strong>Do NOT cancel</strong> any MetaMask popups during the flow</li>
-                      <li><strong>If cancelled:</strong> Just click the bridge button again and complete all steps</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-gray-500 italic">
-                Connect wallet and check USDC balance first
-              </p>
-            )}
-          </div>
-
-          {/* Step 4: Vault Operations */}
+          {/* Step 3: Manual Chain Switcher */}
           <div className="border rounded-lg p-6 bg-gradient-to-br from-green-50 to-blue-50">
             <h2 className="text-xl font-semibold mb-4">Step 4: Vault Operations 🏦</h2>
             <p className="text-sm text-gray-600 mb-4">
@@ -1433,11 +1323,11 @@ export default function Home() {
                         className="w-full border rounded px-3 py-2 bg-white"
                         disabled={crossChainStep !== 'idle'}
                       >
-                        <option value="arbitrum-sepolia">Arbitrum Sepolia (Most Stable ✅)</option>
-                        <option value="sepolia">Arbitrum Sepolia (Same chain, direct deposit)</option>
+                        <option value="sepolia">Ethereum Sepolia (Most Stable ✅)</option>
+                        <option value="arbitrum-sepolia">Arbitrum Sepolia (Same chain, direct deposit)</option>
+                        <option value="base-sepolia">Base Sepolia</option>
                         <option value="optimism-sepolia">Optimism Sepolia</option>
                         <option value="polygon-amoy">Polygon Amoy Testnet</option>
-                        <option value="base-sepolia">Base Sepolia (Less stable ⚠️)</option>
                       </select>
                     </div>
                     
@@ -1457,7 +1347,7 @@ export default function Home() {
                     </div>
                     
                     {/* Step 0: Switch to source chain if needed */}
-                    {sourceChain !== 'sepolia' && crossChainStep === 'idle' && currentChainId !== getChainIdForSource(sourceChain) && (
+                    {sourceChain !== 'arbitrum-sepolia' && crossChainStep === 'idle' && currentChainId !== getChainIdForSource(sourceChain) && (
                       <button
                         onClick={async () => {
                           const targetChainId = getChainIdForSource(sourceChain)
@@ -1475,15 +1365,16 @@ export default function Home() {
                       </button>
                     )}
                     
-                    {/* Step 1: Bridge from source chain (if not Arbitrum Sepolia) */}
-                    {sourceChain !== 'sepolia' && crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && (
+                    {/* Step 1: Bridge from source chain (if not same as vault chain) */}
+                    {sourceChain !== 'arbitrum-sepolia' && crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && (
                       <BridgeButton
                         prefill={{
-                          fromChainId: sourceChain === 'arbitrum-sepolia' ? 421614 : 
+                          fromChainId: sourceChain === 'sepolia' ? 11155111 :
+                                      sourceChain === 'arbitrum-sepolia' ? 421614 : 
                                       sourceChain === 'base-sepolia' ? 84532 :
                                       sourceChain === 'optimism-sepolia' ? 11155420 :
-                                      sourceChain === 'polygon-amoy' ? 80002 : 421614,
-                          toChainId: 11155111, // Arbitrum Sepolia (where vault is)
+                                      sourceChain === 'polygon-amoy' ? 80002 : 11155111,
+                          toChainId: VAULT_CHAIN_ID, // ✅ Dynamic: wherever the vault is deployed
                           token: 'USDC',
                           amount: crossChainAmount || '0.1'
                         } as any}
@@ -1502,10 +1393,11 @@ export default function Home() {
                                 log('🌍 CROSS-CHAIN DEPOSIT - STEP 1: BRIDGE')
                                 log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
                                 const sourceChainName = sourceChain === 'arbitrum-sepolia' ? VAULT_CHAIN_NAME :
+                                                       sourceChain === 'sepolia' ? 'Ethereum Sepolia' :
                                                        sourceChain === 'base-sepolia' ? 'Base Sepolia' :
                                                        sourceChain === 'optimism-sepolia' ? 'Optimism Sepolia' :
                                                        sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain
-                                log(`   Bridge: ${sourceChainName} → Arbitrum Sepolia (where vault is)`)
+                                log(`   Bridge: ${sourceChainName} → ${VAULT_CHAIN_NAME} (where vault is)`)
                                 log(`   Amount: ${crossChainAmount} USDC`)
                                 log('')
                                 setStatus('Opening Avail bridge...')
