@@ -532,7 +532,7 @@ export default function Home() {
       const allowanceHex = await provider.request({
         method: 'eth_call',
         params: [{
-          to: USDC_SEPOLIA,
+          to: VAULT_USDC_ADDRESS, // ✅ FIX: Use dynamic USDC address for vault's chain
           data: '0xdd62ed3e' + // allowance(address,address)
                 address.slice(2).padStart(64, '0') + // owner
                 VAULT_ADDRESS.slice(2).padStart(64, '0') // spender
@@ -551,7 +551,7 @@ export default function Home() {
           method: 'eth_sendTransaction',
           params: [{
             from: address,
-            to: USDC_SEPOLIA,
+            to: VAULT_USDC_ADDRESS, // ✅ FIX: Use dynamic USDC address for vault's chain
             data: '0x095ea7b3' + VAULT_ADDRESS.slice(2).padStart(64, '0') + amountHex // approve(address,uint256)
           }]
         })
