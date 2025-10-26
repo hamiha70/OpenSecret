@@ -1246,10 +1246,11 @@ export default function Home() {
                 <p className="text-xs text-gray-600 mt-2">
                   Currently on: <span className="font-semibold">{
                     currentChainId === VAULT_CHAIN_HEX ? VAULT_CHAIN_NAME :
+                    currentChainId === '0xaa36a7' ? 'Ethereum Sepolia' :
                     currentChainId === '0x14a34' ? 'Base Sepolia' :
                     currentChainId === '0xaa37' ? 'Optimism Sepolia' :
                     currentChainId === '0x13882' ? 'Polygon Amoy' :
-                    currentChainId === VAULT_CHAIN_HEX ? 'Ethereum Sepolia' : currentChainId
+                    currentChainId
                   }</span>
                 </p>
               )}
