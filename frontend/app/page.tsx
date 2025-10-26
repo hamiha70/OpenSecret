@@ -19,6 +19,12 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([])
   const [operatorBotEnabled, setOperatorBotEnabled] = useState(false)
   
+  // Cross-chain deposit state
+  const [sourceChain, setSourceChain] = useState<'sepolia' | 'arbitrum-sepolia' | 'base-sepolia'>('arbitrum-sepolia')
+  const [crossChainAmount, setCrossChainAmount] = useState('')
+  const [crossChainStep, setCrossChainStep] = useState<'idle' | 'bridging' | 'bridge_complete' | 'depositing' | 'complete'>('idle')
+  const [showDirectDeposit, setShowDirectDeposit] = useState(false)
+  
   // Progress tracking for better UX
   const [depositProgress, setDepositProgress] = useState<'idle' | 'checking' | 'approving' | 'requesting' | 'waiting_claim' | 'claiming' | 'success'>('idle')
   const [redeemProgress, setRedeemProgress] = useState<'idle' | 'requesting' | 'waiting_claim' | 'claiming' | 'success'>('idle')
@@ -1286,9 +1292,161 @@ export default function Home() {
                   🔄 Refresh Vault Balances
                 </button>
 
-                {/* Deposit Section */}
-                <div className="p-4 bg-white rounded-lg shadow">
-                  <h3 className="font-semibold mb-3">💰 Deposit USDC</h3>
+                {/* Cross-Chain Deposit Section (Primary) */}
+                <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow-lg border-2 border-purple-200">
+                  <h3 className="font-semibold mb-2 text-lg">🌍 Cross-Chain Deposit (Recommended)</h3>
+                  <p className="text-xs text-gray-600 mb-4">Deposit USDC from ANY chain using Avail Nexus</p>
+                  
+                  <div className="space-y-3">
+                    {/* Source Chain Selector */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Source Chain</label>
+                      <select
+                        value={sourceChain}
+                        onChange={(e) => setSourceChain(e.target.value as any)}
+                        className="w-full border rounded px-3 py-2 bg-white"
+                        disabled={crossChainStep !== 'idle'}
+                      >
+                        <option value="arbitrum-sepolia">Arbitrum Sepolia (Most Stable ✅)</option>
+                        <option value="sepolia">Sepolia (Same chain, direct deposit)</option>
+                        <option value="base-sepolia">Base Sepolia (May be unstable ⚠️)</option>
+                      </select>
+                    </div>
+                    
+                    {/* Amount Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Amount (USDC)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        placeholder="0.1"
+                        value={crossChainAmount}
+                        onChange={(e) => setCrossChainAmount(e.target.value)}
+                        className="w-full border rounded px-3 py-2"
+                        disabled={crossChainStep !== 'idle'}
+                      />
+                    </div>
+                    
+                    {/* Step 1: Bridge from source chain (if not Sepolia) */}
+                    {sourceChain !== 'sepolia' && crossChainStep === 'idle' && (
+                      <BridgeButton
+                        prefill={{
+                          fromChainId: sourceChain === 'arbitrum-sepolia' ? 421614 : 84532, // Arb Sepolia or Base Sepolia
+                          toChainId: 11155111, // Sepolia
+                          token: 'USDC',
+                          amount: crossChainAmount || '0.1'
+                        } as any}
+                      >
+                        {({ onClick, isLoading }) => (
+                          <button
+                            onClick={async () => {
+                              if (!crossChainAmount || parseFloat(crossChainAmount) <= 0) {
+                                log('⚠️ Please enter a valid amount')
+                                setStatus('Please enter amount first')
+                                return
+                              }
+                              setCrossChainStep('bridging')
+                              try {
+                                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                                log('🌍 CROSS-CHAIN DEPOSIT - STEP 1: BRIDGE')
+                                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                                const sourceChainName = sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' : 'Base Sepolia'
+                                log(`   Bridge: ${sourceChainName} → Sepolia`)
+                                log(`   Amount: ${crossChainAmount} USDC`)
+                                log('')
+                                setStatus('Opening Avail bridge...')
+                                
+                                await onClick()
+                                
+                                log('✅ Bridge widget opened!')
+                                log('⏳ Complete the bridge in Avail Nexus widget')
+                                log('   Then click "Complete Deposit" button below')
+                                setStatus('Complete bridge, then click "Complete Deposit"')
+                                setCrossChainStep('bridge_complete')
+                              } catch (err: any) {
+                                log(`❌ Bridge error: ${err.message}`)
+                                setStatus(`Bridge failed: ${err.message}`)
+                                setCrossChainStep('idle')
+                              }
+                            }}
+                            disabled={isLoading || !crossChainAmount || parseFloat(crossChainAmount) <= 0}
+                            className="w-full bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
+                          >
+                            {isLoading ? '⏳ Loading Bridge...' : `🌉 Step 1: Bridge from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' : 'Base Sepolia'}`}
+                          </button>
+                        )}
+                      </BridgeButton>
+                    )}
+                    
+                    {/* Step 2: Deposit to vault (after bridge complete OR if source is Sepolia) */}
+                    {(crossChainStep === 'bridge_complete' || sourceChain === 'sepolia') && crossChainStep !== 'depositing' && crossChainStep !== 'complete' && (
+                      <button
+                        onClick={async () => {
+                          setCrossChainStep('depositing')
+                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                          log('🌍 CROSS-CHAIN DEPOSIT - STEP 2: VAULT DEPOSIT')
+                          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+                          try {
+                            await depositToVault(crossChainAmount)
+                            setCrossChainStep('complete')
+                            log('✅ Cross-chain deposit complete!')
+                            setTimeout(() => {
+                              setCrossChainStep('idle')
+                              setCrossChainAmount('')
+                            }, 3000)
+                          } catch (err: any) {
+                            log(`❌ Vault deposit error: ${err.message}`)
+                            setCrossChainStep(sourceChain === 'sepolia' ? 'idle' : 'bridge_complete')
+                          }
+                        }}
+                        disabled={!crossChainAmount || parseFloat(crossChainAmount) <= 0}
+                        className="w-full bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold text-lg"
+                      >
+                        {sourceChain === 'sepolia' ? '💰 Deposit to Vault' : '✅ Step 2: Complete Deposit to Vault'}
+                      </button>
+                    )}
+                    
+                    {/* Progress feedback */}
+                    {crossChainStep !== 'idle' && (
+                      <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-sm">
+                        <p className="font-semibold text-blue-900">
+                          {crossChainStep === 'bridging' && '🌉 Opening Avail bridge widget...'}
+                          {crossChainStep === 'bridge_complete' && '✅ Bridge initiated! Click "Complete Deposit" below'}
+                          {crossChainStep === 'depositing' && '⏳ Depositing to vault...'}
+                          {crossChainStep === 'complete' && '🎉 Cross-chain deposit complete!'}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Reset button */}
+                    {crossChainStep !== 'idle' && crossChainStep !== 'complete' && (
+                      <button
+                        onClick={() => {
+                          setCrossChainStep('idle')
+                          log('🔄 Cross-chain deposit flow reset')
+                        }}
+                        className="w-full bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 text-sm"
+                      >
+                        ❌ Cancel / Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Direct Deposit Section (Fallback - Collapsible) */}
+                <div className="border-t pt-4">
+                  <button
+                    onClick={() => setShowDirectDeposit(!showDirectDeposit)}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    {showDirectDeposit ? '▼' : '▶'} Show Direct Deposit (Sepolia only)
+                  </button>
+                </div>
+
+                {showDirectDeposit && (
+                  <div className="p-4 bg-white rounded-lg shadow">
+                    <h3 className="font-semibold mb-3">⚡ Direct Deposit (Sepolia USDC)</h3>
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">Amount (USDC)</label>
@@ -1357,6 +1515,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
+                )}
 
                 {/* Redeem Section */}
                 <div className="p-4 bg-white rounded-lg shadow">
