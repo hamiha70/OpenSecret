@@ -519,6 +519,7 @@ export default function Home() {
             const elapsed = Math.floor(pollCount * 5 / 60)
             const remaining = 10 - elapsed
             log(`   ⏳ Still polling... (${elapsed}m elapsed, ${remaining}m remaining)`)
+            setStatus(`🌉 Waiting for bridge... ${elapsed}m/${10}m (Track: bridge.availproject.org/intents)`)
           }
         }
       } catch (err: any) {
@@ -1426,11 +1427,14 @@ export default function Home() {
                                 await onClick()
                                 
                                 log('✅ Bridge widget opened!')
+                                log('📊 Track your bridge live: https://bridge.availproject.org/intents')
+                                log(`   Your address: ${address}`)
                                 
                                 if (operatorBotEnabled) {
                                   log('🤖 Auto-deposit mode: Will detect bridge completion automatically')
                                   log('⚠️  IMPORTANT: Complete the bridge in Avail widget first!')
-                                  log('   Bot will auto-deposit after bridge arrives (polling for 3 minutes)')
+                                  log('   Bot will auto-deposit after bridge arrives (polling for 10 minutes)')
+                                  log('💡 Watch bridge progress: https://bridge.availproject.org/intents')
                                   setStatus('Complete bridge in widget - bot will auto-deposit')
                                   // Don't switch chains yet - let user complete bridge first
                                   // Polling will work on any chain (uses QuickNode RPC directly)
