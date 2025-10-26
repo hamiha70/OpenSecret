@@ -1247,8 +1247,8 @@ export default function Home() {
                   <option value="base-sepolia">Base Sepolia (Most Common)</option>
                   <option value="optimism-sepolia">Optimism Sepolia</option>
                   <option value="sepolia">Ethereum Sepolia</option>
-                  <option value="arbitrum-sepolia">Arbitrum Sepolia (Add via Chainlist)</option>
-                  <option value="polygon-amoy">Polygon Amoy (Add via Chainlist)</option>
+                  <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+                  <option value="polygon-amoy">Polygon Amoy</option>
                 </select>
                 <button
                   onClick={async () => {
