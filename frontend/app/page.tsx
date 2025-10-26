@@ -41,16 +41,6 @@ export default function Home() {
   const USDC_BASE_SEPOLIA = CONTRACTS.usdc.baseSepolia // Base Sepolia (best for Avail)
   const USDC_ARB_SEPOLIA = CONTRACTS.usdc.arbitrumSepolia
   const VAULT_ADDRESS = CONTRACTS.vault.address
-  // Avail Nexus bridge addresses per chain (for USDC approvals)
-  // These are the Avail Nexus router addresses that handle cross-chain bridging
-  const AVAIL_BRIDGE_ADDRESSES: Record<string, string> = {
-    'arbitrum-sepolia': '0x0000000000000000000000000000000000000000', // TODO: Get from Avail docs
-    'base-sepolia': '0x0000000000000000000000000000000000000000', // TODO: Get from Avail docs
-    'optimism-sepolia': '0x0000000000000000000000000000000000000000', // TODO: Get from Avail docs
-    'sepolia': '0x0000000000000000000000000000000000000000', // TODO: Get from Avail docs
-  }
-  
-  const AVAIL_BRIDGE_ADDRESS = AVAIL_BRIDGE_ADDRESSES[sourceChain] || '0x0000000000000000000000000000000000000000'
   
   // Automatically select correct USDC address based on vault chain
   const getVaultChainUSDC = () => {
@@ -231,62 +221,8 @@ export default function Home() {
     }
   }
 
-  const approveUSDCForAvailBridge = async () => {
-    try {
-      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      log('🌉 APPROVING USDC FOR AVAIL BRIDGE')
-      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      setStatus('Approving USDC for Avail Bridge...')
-
-      let provider = window.ethereum
-      if (window.ethereum?.providers) {
-        provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
-      }
-
-      // Get USDC address for the selected source chain
-      const sourceChainUSDC = sourceChain === 'arbitrum-sepolia' ? USDC_ARB_SEPOLIA :
-                              sourceChain === 'base-sepolia' ? USDC_BASE_SEPOLIA :
-                              sourceChain === 'optimism-sepolia' ? USDC_OPTIMISM_SEPOLIA :
-                              USDC_SEPOLIA
-
-      // Check current chain - should ALREADY be on source chain!
-      const chainId = await provider.request({ method: 'eth_chainId' })
-      log(`Current chain: ${chainId}`)
-      log(`Selected source chain: ${sourceChain}`)
-      log(`USDC contract: ${sourceChainUSDC}`)
-
-      // Approve max uint256 for unlimited spending
-      const maxApproval = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-      
-      log(`💰 Approving unlimited USDC for Avail bridge on ${sourceChain}...`)
-      log('   (This is a one-time approval for cross-chain bridging)')
-      log('⚠️  Note: Avail bridge address is placeholder - will be updated in Phase 3')
-      
-      const approveTx = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [{
-          from: address,
-          to: sourceChainUSDC,
-          data: '0x095ea7b3' + // approve(address,uint256)
-                AVAIL_BRIDGE_ADDRESS.slice(2).padStart(64, '0') + // bridge address (TODO: update)
-                maxApproval.slice(2), // max amount
-          gas: '0x' + (100000).toString(16)
-        }]
-      })
-      
-      log(`📤 Approval tx: ${approveTx}`)
-      log('⏳ Waiting for confirmation...')
-      await waitForTransaction(provider, approveTx)
-      
-      log(`✅ USDC approved for Avail bridge on ${sourceChain}!`)
-      log(`   You can now bridge from ${sourceChain} → ${VAULT_CHAIN_NAME}`)
-      
-      setStatus('✅ USDC approved for Avail bridge')
-    } catch (error: any) {
-      log(`❌ Avail bridge approval error: ${error.message}`)
-      setStatus(`Avail bridge approval failed: ${error.message}`)
-    }
-  }
+  // Removed: approveUSDCForAvailBridge() - Not needed!
+  // Avail Nexus widget handles approvals internally when nexus.bridge() is called
 
   const checkUSDC = async () => {
     try {
@@ -1327,21 +1263,12 @@ export default function Home() {
                 </div>
                 
                 <div className="p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
-                  <p className="font-semibold text-blue-900 mb-2">🌉 Cross-Chain Bridge (Avail Nexus)</p>
-                  <p className="text-sm text-blue-800 mb-3">
-                    Approve USDC on Base Sepolia for automatic bridging to Arbitrum Sepolia!
+                  <p className="font-semibold text-blue-900 mb-2">ℹ️  About Avail Nexus Approvals</p>
+                  <p className="text-sm text-blue-800 mb-2">
+                    No pre-approval needed! The Avail Nexus widget will automatically prompt for USDC approval when you bridge.
                   </p>
-                  <button
-                    onClick={approveUSDCForAvailBridge}
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 font-semibold text-sm"
-                  >
-                    🌉 Approve USDC (Avail Bridge)
-                  </button>
-                  <p className="text-xs text-gray-600 mt-2">
-                    💡 This switches to Base Sepolia, approves USDC for the Avail bridge, then switches back
-                  </p>
-                  <p className="text-xs text-amber-600 mt-1">
-                    ⚠️  Coming in Phase 3 - bridge address is placeholder for now
+                  <p className="text-xs text-gray-600">
+                    💡 Avail Nexus uses a decentralized solver network - the widget handles all approvals internally
                   </p>
                 </div>
               </div>
