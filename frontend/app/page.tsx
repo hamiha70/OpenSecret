@@ -22,8 +22,9 @@ export default function Home() {
   // Cross-chain deposit state
   const [sourceChain, setSourceChain] = useState<'sepolia' | 'arbitrum-sepolia' | 'base-sepolia' | 'optimism-sepolia' | 'polygon-amoy'>('arbitrum-sepolia')
   const [crossChainAmount, setCrossChainAmount] = useState('')
-  const [crossChainStep, setCrossChainStep] = useState<'idle' | 'bridging' | 'bridge_complete' | 'depositing' | 'complete'>('idle')
+  const [crossChainStep, setCrossChainStep] = useState<'idle' | 'switch_needed' | 'bridging' | 'bridge_complete' | 'depositing' | 'complete'>('idle')
   const [showDirectDeposit, setShowDirectDeposit] = useState(false)
+  const [currentChainId, setCurrentChainId] = useState<string | null>(null)
   const lastUSDCBalanceRef = useRef<number | null>(null)
   
   // Progress tracking for better UX
@@ -100,19 +101,26 @@ export default function Home() {
       log('🔗 Provider forwarded to Avail Nexus')
       
       const chainId = await provider.request({ method: 'eth_chainId' })
+      setCurrentChainId(chainId)
       
       log(`✅ Connected: ${userAddress}`)
       log(`   Chain ID: ${chainId}`)
       
       if (chainId !== '0xaa36a7') {
         log('⚠️ Warning: Not on Sepolia')
-        log(`   Current network: ${chainId === '0x1' ? 'Ethereum Mainnet' : chainId}`)
-        log('   Will auto-switch when you check PYUSD')
-        setStatus('Connected - Please switch to Sepolia')
+        log(`   Current network: ${chainId}`)
+        log('   This is OK for cross-chain deposits!')
+        setStatus(`Connected to ${chainId}`)
       } else {
         log('✅ Correct network: Sepolia')
         setStatus('Connected to Sepolia')
       }
+      
+      // Listen for chain changes
+      provider.on('chainChanged', (newChainId: string) => {
+        log(`🔄 Chain changed to: ${newChainId}`)
+        setCurrentChainId(newChainId)
+      })
 
     } catch (error: any) {
       log(`❌ Error: ${error.message}`)
@@ -421,6 +429,56 @@ export default function Home() {
       setStatus('Vault balances loaded')
     } catch (error: any) {
       log(`❌ Vault balance error: ${error.message}`)
+    }
+  }
+
+  // Chain switching helper
+  const switchToChain = async (chainId: string, chainName: string) => {
+    try {
+      let provider = window.ethereum
+      if (window.ethereum?.providers) {
+        provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
+      }
+
+      log(`🔄 Switching to ${chainName}...`)
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId }],
+      })
+      
+      setCurrentChainId(chainId)
+      log(`✅ Switched to ${chainName}`)
+      return true
+    } catch (error: any) {
+      if (error.code === 4902) {
+        log(`⚠️ ${chainName} not added to MetaMask`)
+        // Could add the chain here, but for testnets user should add manually
+      } else {
+        log(`❌ Failed to switch: ${error.message}`)
+      }
+      return false
+    }
+  }
+
+  const getChainIdForSource = (source: string): string => {
+    switch(source) {
+      case 'arbitrum-sepolia': return '0x66eee'  // 421614
+      case 'base-sepolia': return '0x14a34'      // 84532
+      case 'optimism-sepolia': return '0xaa37'   // 11155420
+      case 'polygon-amoy': return '0x13882'      // 80002
+      case 'sepolia': return '0xaa36a7'          // 11155111
+      default: return '0xaa36a7'
+    }
+  }
+
+  const getChainName = (source: string): string => {
+    switch(source) {
+      case 'arbitrum-sepolia': return 'Arbitrum Sepolia'
+      case 'base-sepolia': return 'Base Sepolia'
+      case 'optimism-sepolia': return 'Optimism Sepolia'
+      case 'polygon-amoy': return 'Polygon Amoy'
+      case 'sepolia': return 'Sepolia'
+      default: return source
     }
   }
 
@@ -1394,8 +1452,27 @@ export default function Home() {
                       />
                     </div>
                     
+                    {/* Step 0: Switch to source chain if needed */}
+                    {sourceChain !== 'sepolia' && crossChainStep === 'idle' && currentChainId !== getChainIdForSource(sourceChain) && (
+                      <button
+                        onClick={async () => {
+                          const targetChainId = getChainIdForSource(sourceChain)
+                          const targetChainName = getChainName(sourceChain)
+                          const success = await switchToChain(targetChainId, targetChainName)
+                          if (success) {
+                            log(`✅ Ready to bridge from ${targetChainName}`)
+                            // Don't change crossChainStep - stay in 'idle' so bridge button appears
+                          }
+                        }}
+                        disabled={!crossChainAmount || parseFloat(crossChainAmount) <= 0}
+                        className="w-full bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
+                      >
+                        🔄 Step 1: Switch to {getChainName(sourceChain)}
+                      </button>
+                    )}
+                    
                     {/* Step 1: Bridge from source chain (if not Sepolia) */}
-                    {sourceChain !== 'sepolia' && crossChainStep === 'idle' && (
+                    {sourceChain !== 'sepolia' && crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && (
                       <BridgeButton
                         prefill={{
                           fromChainId: sourceChain === 'arbitrum-sepolia' ? 421614 : 
@@ -1436,6 +1513,8 @@ export default function Home() {
                                 if (operatorBotEnabled) {
                                   log('🤖 Auto-deposit mode: Will detect bridge completion automatically')
                                   setStatus('Complete bridge - will auto-deposit when done')
+                                  // Switch back to Sepolia for polling
+                                  await switchToChain('0xaa36a7', 'Sepolia')
                                   startAutoDepositPolling()
                                 } else {
                                   log('⏳ Complete the bridge in Avail Nexus widget')
@@ -1476,6 +1555,12 @@ export default function Home() {
                           log('🌍 CROSS-CHAIN DEPOSIT - STEP 2: VAULT DEPOSIT')
                           log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
                           try {
+                            // Ensure we're on Sepolia for vault deposit
+                            if (currentChainId !== '0xaa36a7') {
+                              log('🔄 Switching back to Sepolia for vault deposit...')
+                              await switchToChain('0xaa36a7', 'Sepolia')
+                            }
+                            
                             await depositToVault(crossChainAmount)
                             setCrossChainStep('complete')
                             log('✅ Cross-chain deposit complete!')
