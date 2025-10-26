@@ -1453,9 +1453,9 @@ export default function Home() {
                       </BridgeButton>
                     )}
                     
-                    {/* Step 2: Deposit to vault (after bridge complete OR if source is Arbitrum Sepolia) */}
+                    {/* Step 2: Deposit to vault (after bridge complete OR for same-chain deposit) */}
                     {/* ALWAYS show button for full control - works in both bot and manual mode */}
-                    {(crossChainStep === 'bridge_complete' || crossChainStep === 'bridging' || sourceChain === 'sepolia') && crossChainStep !== 'depositing' && crossChainStep !== 'complete' && (
+                    {(crossChainStep === 'bridge_complete' || crossChainStep === 'bridging' || sourceChain === 'sepolia' || sourceChain === 'arbitrum-sepolia') && crossChainStep !== 'depositing' && crossChainStep !== 'complete' && (
                       <button
                         onClick={async () => {
                           setCrossChainStep('depositing')
@@ -1497,7 +1497,7 @@ export default function Home() {
                         disabled={!crossChainAmount || parseFloat(crossChainAmount) <= 0}
                         className="w-full bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold text-lg"
                       >
-                        {sourceChain === 'sepolia' 
+                        {sourceChain === 'sepolia' || sourceChain === 'arbitrum-sepolia'
                           ? '💰 Deposit to Vault' 
                           : operatorBotEnabled && crossChainStep === 'bridging'
                             ? '🤖 Manual Override: Complete Deposit Now'
