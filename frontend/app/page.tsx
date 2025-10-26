@@ -234,29 +234,22 @@ export default function Home() {
         provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
       }
 
-      // Check current chain
+      // Get USDC address for the selected source chain
+      const sourceChainUSDC = sourceChain === 'arbitrum-sepolia' ? USDC_ARB_SEPOLIA :
+                              sourceChain === 'base-sepolia' ? USDC_BASE_SEPOLIA :
+                              sourceChain === 'optimism-sepolia' ? USDC_OPTIMISM_SEPOLIA :
+                              USDC_SEPOLIA
+
+      // Check current chain - should ALREADY be on source chain!
       const chainId = await provider.request({ method: 'eth_chainId' })
       log(`Current chain: ${chainId}`)
-
-      // Switch to Base Sepolia if needed
-      if (chainId !== '0x14a34') { // Base Sepolia chain ID (84532 = 0x14a34)
-        log('⚠️  Not on Base Sepolia - switching networks...')
-        try {
-          await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x14a34' }],
-          })
-          log('✅ Switched to Base Sepolia successfully!')
-        } catch (switchError: any) {
-          log(`❌ Failed to switch: ${switchError.message}`)
-          throw new Error(`Wrong network! Please switch to Base Sepolia in MetaMask`)
-        }
-      }
+      log(`Selected source chain: ${sourceChain}`)
+      log(`USDC contract: ${sourceChainUSDC}`)
 
       // Approve max uint256 for unlimited spending
       const maxApproval = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
       
-      log('💰 Approving unlimited USDC for Avail bridge on Base Sepolia...')
+      log(`💰 Approving unlimited USDC for Avail bridge on ${sourceChain}...`)
       log('   (This is a one-time approval for cross-chain bridging)')
       log('⚠️  Note: Avail bridge address is placeholder - will be updated in Phase 3')
       
@@ -264,7 +257,7 @@ export default function Home() {
         method: 'eth_sendTransaction',
         params: [{
           from: address,
-          to: USDC_BASE_SEPOLIA,
+          to: sourceChainUSDC,
           data: '0x095ea7b3' + // approve(address,uint256)
                 AVAIL_BRIDGE_ADDRESS.slice(2).padStart(64, '0') + // bridge address (TODO: update)
                 maxApproval.slice(2), // max amount
@@ -272,23 +265,12 @@ export default function Home() {
         }]
       })
       
-      log(`📤 Approval tx on Base Sepolia: ${approveTx}`)
+      log(`📤 Approval tx: ${approveTx}`)
       log('⏳ Waiting for confirmation...')
       await waitForTransaction(provider, approveTx)
       
-      log('✅ USDC approved for Avail bridge! You can now bridge from Base → Arbitrum Sepolia')
-      log('💡 Switching back to Ethereum Sepolia for vault operations...')
-      
-      // Switch back to Arbitrum Sepolia
-      try {
-        await provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: VAULT_CHAIN_HEX }], // Arbitrum Sepolia
-        })
-        log('✅ Switched back to Ethereum Sepolia')
-      } catch (switchError: any) {
-        log('⚠️  Please manually switch back to Ethereum Sepolia')
-      }
+      log(`✅ USDC approved for Avail bridge on ${sourceChain}!`)
+      log(`   You can now bridge from ${sourceChain} → ${VAULT_CHAIN_NAME}`)
       
       setStatus('✅ USDC approved for Avail bridge')
     } catch (error: any) {
@@ -435,7 +417,7 @@ export default function Home() {
 
       // Check vault's total USDC balance - ALWAYS use QuickNode (critical for market bot updates)
       const vaultUSDCData = '0x70a08231000000000000000000000000' + VAULT_ADDRESS.slice(2) // balanceOf(VAULT_ADDRESS)
-      const vaultUSDCHex = await fetchViaQuickNode(vaultUSDCData, USDC_SEPOLIA)
+      const vaultUSDCHex = await fetchViaQuickNode(vaultUSDCData, VAULT_USDC_ADDRESS)
       const vaultUSDCWei = parseInt(vaultUSDCHex, 16)
       const vaultUSDC = vaultUSDCWei / 1e6
       setVaultUSDCBalance(vaultUSDC.toFixed(6))
@@ -522,7 +504,7 @@ export default function Home() {
       try {
         // Fetch current USDC balance via QuickNode (bypass cache)
         const balanceData = '0x70a08231000000000000000000000000' + address.slice(2)
-        const balanceHex = await fetchViaQuickNode(balanceData, USDC_SEPOLIA)
+        const balanceHex = await fetchViaQuickNode(balanceData, VAULT_USDC_ADDRESS)
         const currentBalance = parseInt(balanceHex, 16) / 1e6
 
         if (lastUSDCBalanceRef.current === null) {
