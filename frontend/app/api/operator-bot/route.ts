@@ -20,15 +20,18 @@ const processing = new Set<string>()
 const failedClaims = new Map<string, any>()
 
 // Configuration
-const VAULT_ADDRESS = process.env.ASYNCVAULT_ADDRESS || process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS
-const RPC_URL = process.env.ETHEREUM_SEPOLIA_RPC
+const VAULT_ADDRESS = process.env.VAULT_ADDRESS || process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS
+const VAULT_CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_VAULT_CHAIN_ID || '421614')
+const RPC_URL = VAULT_CHAIN_ID === 11155111 
+  ? process.env.ETHEREUM_SEPOLIA_RPC 
+  : process.env.ARBITRUM_SEPOLIA_RPC
 const OPERATOR_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY
 const POLL_INTERVAL_MS = 5000
 
 // Validate environment variables
 function validateEnv() {
-  if (!VAULT_ADDRESS) throw new Error('ASYNCVAULT_ADDRESS not set')
-  if (!RPC_URL) throw new Error('ETHEREUM_SEPOLIA_RPC not set')
+  if (!VAULT_ADDRESS) throw new Error('VAULT_ADDRESS not set')
+  if (!RPC_URL) throw new Error('RPC_URL not set for chain ' + VAULT_CHAIN_ID)
   if (!OPERATOR_PRIVATE_KEY) throw new Error('DEPLOYER_PRIVATE_KEY not set')
 }
 

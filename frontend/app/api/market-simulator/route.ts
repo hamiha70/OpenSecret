@@ -24,8 +24,17 @@ let isProcessing = false
 
 // Configuration - Geometric Brownian Motion Parameters
 const VAULT_ADDRESS = process.env.VAULT_ADDRESS || process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS
-const USDC_ADDRESS = '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d' // Arbitrum Sepolia USDC
-const RPC_URL = process.env.ARBITRUM_SEPOLIA_RPC_URL || process.env.ARBITRUM_SEPOLIA_RPC
+const VAULT_CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_VAULT_CHAIN_ID || '421614')
+
+// Auto-select USDC address and RPC based on chain
+const USDC_ADDRESS = VAULT_CHAIN_ID === 11155111 
+  ? '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'  // Ethereum Sepolia
+  : '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'  // Arbitrum Sepolia (default)
+
+const RPC_URL = VAULT_CHAIN_ID === 11155111
+  ? process.env.ETHEREUM_SEPOLIA_RPC
+  : (process.env.ARBITRUM_SEPOLIA_RPC_URL || process.env.ARBITRUM_SEPOLIA_RPC)
+
 const SIMULATOR_PRIVATE_KEY = process.env.SIMULATOR_PRIVATE_KEY
 
 // Geometric Brownian Motion Configuration
@@ -56,7 +65,7 @@ let nextEventTime: number | null = null
 // Validate environment variables
 function validateEnv() {
   if (!VAULT_ADDRESS) throw new Error('VAULT_ADDRESS not set')
-  if (!RPC_URL) throw new Error('ARBITRUM_SEPOLIA_RPC_URL not set')
+  if (!RPC_URL) throw new Error(`RPC_URL not set for chain ${VAULT_CHAIN_ID}`)
   if (!SIMULATOR_PRIVATE_KEY) throw new Error('SIMULATOR_PRIVATE_KEY not set')
 }
 
@@ -127,10 +136,26 @@ async function simulateMarket() {
     }
     const totalAssets = Number(ethers.formatUnits(totalAssetsRaw, 6))
     
-    // Handle zero balance edge case
+    // Handle zero balance edge case - add seed capital instead of skipping
     if (totalAssets === 0) {
-      console.log('[Market Simulator] ⚠️  Vault balance is 0, skipping simulation')
-      return
+      console.log('[Market Simulator] 💰 Vault balance is 0, adding seed capital...')
+      const seedAmount = ethers.parseUnits('10', 6) // 10 USDC seed
+      
+      try {
+        const transferTx = await usdc.transfer(VAULT_ADDRESS, seedAmount, { gasLimit: 100000 })
+        await transferTx.wait()
+        console.log(`[Market Simulator] ✅ Added 10 USDC seed capital to vault`)
+        console.log(`[Market Simulator]    Tx: ${transferTx.hash}`)
+        
+        // Emit profit event for indexer
+        const profitTx = await vault.realizeProfit(USDC_ADDRESS, seedAmount, { gasLimit: 100000 })
+        await profitTx.wait()
+        console.log(`[Market Simulator] 📈 Emitted ProfitRealized event`)
+        return
+      } catch (error: any) {
+        console.error('[Market Simulator] ❌ Failed to add seed capital:', error.message)
+        return
+      }
     }
     
     // Calculate relative profit using geometric Brownian motion
