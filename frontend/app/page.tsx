@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { BridgeButton, useNexus } from '@avail-project/nexus-widgets'
-import { CONTRACTS, VAULT_CHAIN_HEX, VAULT_CHAIN_NAME } from '../config/contracts'
+import { CONTRACTS, VAULT_CHAIN_HEX, VAULT_CHAIN_NAME, VAULT_CHAIN_ID } from '../config/contracts'
 import AsyncVaultABI from '../config/AsyncVault.abi.json'
 
 export default function Home() {
@@ -36,12 +36,24 @@ export default function Home() {
   const isClaimingDepositRef = useRef(false)
   const isClaimingRedeemRef = useRef(false)
 
-  // Contract addresses (Now on Arbitrum Sepolia!)
+  // Contract addresses - dynamically configured based on vault deployment
   const USDC_SEPOLIA = CONTRACTS.usdc.sepolia
   const USDC_BASE_SEPOLIA = CONTRACTS.usdc.baseSepolia // Base Sepolia (best for Avail)
-  const USDC_ARB_SEPOLIA = CONTRACTS.usdc.arbitrumSepolia // Vault is on Arbitrum Sepolia
+  const USDC_ARB_SEPOLIA = CONTRACTS.usdc.arbitrumSepolia
   const VAULT_ADDRESS = CONTRACTS.vault.address
   const AVAIL_BRIDGE_ADDRESS = '0x0000000000000000000000000000000000000000' // TODO: Update in Phase 3
+  
+  // Automatically select correct USDC address based on vault chain
+  const getVaultChainUSDC = () => {
+    switch(VAULT_CHAIN_ID) {
+      case 11155111: return USDC_SEPOLIA      // Ethereum Sepolia
+      case 421614: return USDC_ARB_SEPOLIA    // Arbitrum Sepolia
+      case 84532: return USDC_BASE_SEPOLIA    // Base Sepolia
+      default: return USDC_ARB_SEPOLIA        // Default to Arbitrum Sepolia
+    }
+  }
+  
+  const VAULT_USDC_ADDRESS = getVaultChainUSDC()
 
   const log = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -313,23 +325,23 @@ export default function Home() {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: VAULT_CHAIN_HEX }],
           })
-          log('✅ Switched to Arbitrum Sepolia successfully!')
-          log('Please click "Check PYUSD" again')
-          setStatus('Switched to Arbitrum Sepolia - try again')
+          log(`✅ Switched to ${VAULT_CHAIN_NAME} successfully!`)
+          log('Please click "Check USDC" again')
+          setStatus(`Switched to ${VAULT_CHAIN_NAME} - try again`)
           return
         } catch (switchError: any) {
           log(`❌ Failed to switch: ${switchError.message}`)
-          throw new Error(`Wrong network! You're on ${chainId === '0x1' ? 'Mainnet' : chainId}. Please manually switch to Arbitrum Sepolia in MetaMask`)
+          throw new Error(`Wrong network! You're on ${chainId === '0x1' ? 'Mainnet' : chainId}. Please manually switch to ${VAULT_CHAIN_NAME} in MetaMask`)
         }
       }
 
       log(`Calling balanceOf for address: ${address}`)
-      log(`USDC contract: ${USDC_SEPOLIA}`)
+      log(`USDC contract: ${VAULT_USDC_ADDRESS} (${VAULT_CHAIN_NAME})`)
 
       const balanceHex = await provider.request({
         method: 'eth_call',
         params: [{
-          to: USDC_SEPOLIA,
+          to: VAULT_USDC_ADDRESS,
           data: '0x70a08231000000000000000000000000' + address.slice(2)
         }, 'latest']
       })
@@ -1292,7 +1304,7 @@ export default function Home() {
                 <div className="p-4 bg-green-50 rounded">
                   <p className="text-2xl font-bold">{usdcBalance} USDC</p>
                   <p className="text-sm text-gray-600 mt-2">
-                    Contract: <span className="font-mono text-xs">{USDC_SEPOLIA}</span>
+                    Contract: <span className="font-mono text-xs">{VAULT_USDC_ADDRESS}</span> ({VAULT_CHAIN_NAME})
                   </p>
                   <p className="text-sm text-blue-600 mt-2">
                     🪙 Get testnet USDC: <a href="https://faucet.circle.com/" target="_blank" rel="noopener" className="underline">faucet.circle.com</a>
