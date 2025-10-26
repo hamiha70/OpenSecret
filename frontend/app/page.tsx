@@ -435,13 +435,20 @@ export default function Home() {
     }
   }
 
-  // Auto-trigger: Poll for balance increase and auto-deposit
+  // Auto-trigger: Poll for balance increase and auto-deposit (Hybrid approach)
   const startAutoDepositPolling = () => {
     log('🤖 Auto-deposit mode: Polling for balance increase...')
-    log('   Will auto-deposit when bridge completes')
+    log('   Will auto-deposit when bridge completes (polling for 3 minutes)')
+    
+    let pollCount = 0
+    const maxPolls = 36 // 3 minutes / 5 seconds = 36 polls
     
     const pollInterval = setInterval(async () => {
-      if (!address || crossChainStep !== 'bridging') {
+      pollCount++
+      
+      // Don't check crossChainStep - continue polling even if state changes
+      // This makes polling more robust during chain switches
+      if (!address) {
         clearInterval(pollInterval)
         return
       }
@@ -493,22 +500,26 @@ export default function Home() {
               setCrossChainStep('bridge_complete') // Fall back to manual
               lastUSDCBalanceRef.current = null
             }
+          } else if (pollCount >= maxPolls) {
+            // Timeout after 3 minutes - fall back to manual mode
+            log('⏱️ Auto-deposit timeout (3 minutes) - falling back to manual mode')
+            log('   Bridge may still be processing - click "Complete Deposit" when ready')
+            clearInterval(pollInterval)
+            setCrossChainStep('bridge_complete')
+            setStatus('Bridge complete - click "Complete Deposit" to finish')
+            lastUSDCBalanceRef.current = null
+          } else if (pollCount % 6 === 0) {
+            // Log progress every 30 seconds (6 polls * 5 seconds)
+            const elapsed = Math.floor(pollCount * 5 / 60)
+            const remaining = 3 - elapsed
+            log(`   ⏳ Still polling... (${elapsed}m elapsed, ${remaining}m remaining)`)
           }
         }
       } catch (err: any) {
         log(`⚠️ Polling error: ${err.message}`)
+        // Don't stop polling on errors - bridge might still complete
       }
-    }, 5000) // Poll every 5 seconds
-
-    // Timeout after 5 minutes
-    setTimeout(() => {
-      clearInterval(pollInterval)
-      if (crossChainStep === 'bridging') {
-        log('⏱️ Auto-deposit timeout - falling back to manual mode')
-        setCrossChainStep('bridge_complete')
-        lastUSDCBalanceRef.current = null
-      }
-    }, 300000) // 5 minutes
+    }, 5000) // Poll every 5 seconds (36 times = 3 minutes)
   }
 
   const depositToVault = async (amount: string) => {
@@ -1442,8 +1453,9 @@ export default function Home() {
                       </BridgeButton>
                     )}
                     
-                    {/* Step 2: Deposit to vault (after bridge complete OR if source is Arbitrum Sepolia) - MANUAL MODE ONLY */}
-                    {!operatorBotEnabled && (crossChainStep === 'bridge_complete' || sourceChain === 'sepolia') && crossChainStep !== 'depositing' && crossChainStep !== 'complete' && (
+                    {/* Step 2: Deposit to vault (after bridge complete OR if source is Arbitrum Sepolia) */}
+                    {/* ALWAYS show button for full control - works in both bot and manual mode */}
+                    {(crossChainStep === 'bridge_complete' || crossChainStep === 'bridging' || sourceChain === 'sepolia') && crossChainStep !== 'depositing' && crossChainStep !== 'complete' && (
                       <button
                         onClick={async () => {
                           setCrossChainStep('depositing')
@@ -1485,7 +1497,11 @@ export default function Home() {
                         disabled={!crossChainAmount || parseFloat(crossChainAmount) <= 0}
                         className="w-full bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold text-lg"
                       >
-                        {sourceChain === 'sepolia' ? '💰 Deposit to Vault' : '✅ Step 2: Complete Deposit to Vault'}
+                        {sourceChain === 'sepolia' 
+                          ? '💰 Deposit to Vault' 
+                          : operatorBotEnabled && crossChainStep === 'bridging'
+                            ? '🤖 Manual Override: Complete Deposit Now'
+                            : '✅ Step 2: Complete Deposit to Vault'}
                       </button>
                     )}
                     
