@@ -1406,15 +1406,24 @@ export default function Home() {
                     )}
                     
                     {/* Step 1: Bridge from source chain (ALWAYS show if different from vault chain AND on correct chain) */}
-                    {/* ✅ FIX: Show bridge button even during bridging to prevent widget from unmounting! */}
+                    {/* ✅ FIX: During bridging, ignore chain checks - Avail widget handles chain switching internally! */}
                     {(() => {
-                      const shouldShow = (crossChainStep === 'idle' || crossChainStep === 'bridging') && currentChainId === getChainIdForSource(sourceChain) && getChainIdForSource(sourceChain) !== VAULT_CHAIN_HEX
+                      const isOnSourceChain = currentChainId === getChainIdForSource(sourceChain)
+                      const isDifferentFromVault = getChainIdForSource(sourceChain) !== VAULT_CHAIN_HEX
+                      
+                      // While bridging, keep button mounted regardless of current chain (Avail switches chains internally)
+                      const shouldShow = crossChainStep === 'bridging' 
+                        ? isDifferentFromVault  // During bridging: only check it's a cross-chain operation
+                        : (crossChainStep === 'idle' && isOnSourceChain && isDifferentFromVault)  // While idle: check we're on correct chain
+                      
                       console.log('🔍 BridgeButton render check:', {
                         crossChainStep,
                         currentChainId,
                         sourceChain,
                         sourceChainId: getChainIdForSource(sourceChain),
                         vaultChainHex: VAULT_CHAIN_HEX,
+                        isOnSourceChain,
+                        isDifferentFromVault,
                         shouldShow
                       })
                       return shouldShow
