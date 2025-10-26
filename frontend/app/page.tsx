@@ -40,6 +40,23 @@ export default function Home() {
     console.log(message)
   }
 
+  // QuickNode RPC helper to bypass MetaMask caching
+  const QUICKNODE_RPC = 'https://capable-old-patina.ethereum-sepolia.quiknode.pro/19c7866bd850944b4be61fecda916d34c15658aa/'
+  const fetchViaQuickNode = async (data: string, to: string) => {
+    const response = await fetch(QUICKNODE_RPC, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{ to, data }, 'latest'],
+        id: 1
+      })
+    })
+    const json = await response.json()
+    return json.result
+  }
+
   useEffect(() => {
     log('🚀 Avail Nexus + USDC Test Page Loaded')
     log('Make sure MetaMask is installed and you are on Ethereum Sepolia')
@@ -335,51 +352,33 @@ export default function Home() {
         throw new Error('No wallet address connected')
       }
 
-      // SOLUTION: Use QuickNode RPC directly to bypass MetaMask caching
-      // MetaMask aggressively caches eth_call responses, even with fresh block numbers
-      const QUICKNODE_RPC = 'https://capable-old-patina.ethereum-sepolia.quiknode.pro/19c7866bd850944b4be61fecda916d34c15658aa/'
-      
-      const fetchViaQuickNode = async (data: string, to: string) => {
-        const response = await fetch(QUICKNODE_RPC, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'eth_call',
-            params: [{ to, data }, 'latest'],
-            id: 1
-          })
-        })
-        const json = await response.json()
-        return json.result
-      }
-      // For user-specific data (shares, pending), MetaMask is OK since it's less critical
+      // For user-specific data, we conditionally use QuickNode in bot mode
       let provider = window.ethereum
       if (window.ethereum?.providers) {
         provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
       }
       
-      // Get shares balance
-      const sharesHex = await provider.request({
-        method: 'eth_call',
-        params: [{
-          to: VAULT_ADDRESS,
-          data: '0x70a08231000000000000000000000000' + address.slice(2) // balanceOf(address)
-        }, 'latest']
-      })
+      // Get shares balance (use QuickNode for fresh data in bot mode)
+      const sharesData = '0x70a08231000000000000000000000000' + address.slice(2) // balanceOf(address)
+      const sharesHex = operatorBotEnabled
+        ? await fetchViaQuickNode(sharesData, VAULT_ADDRESS)
+        : await provider.request({
+            method: 'eth_call',
+            params: [{ to: VAULT_ADDRESS, data: sharesData }, 'latest']
+          })
       const sharesWei = parseInt(sharesHex, 16)
       const shares = sharesWei / 1e6
       setVaultShares(shares.toFixed(6))
       log(`✅ Vault Shares: ${shares.toFixed(6)} ovUSDC`)
 
-      // Check pending deposit
-      const pendingDepositHex = await provider.request({
-        method: 'eth_call',
-        params: [{
-          to: VAULT_ADDRESS,
-          data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address)
-        }, 'latest']
-      })
+      // Check pending deposit (use QuickNode for fresh data in bot mode)
+      const pendingDepositData = '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address)
+      const pendingDepositHex = operatorBotEnabled 
+        ? await fetchViaQuickNode(pendingDepositData, VAULT_ADDRESS)
+        : await provider.request({
+            method: 'eth_call',
+            params: [{ to: VAULT_ADDRESS, data: pendingDepositData }, 'latest']
+          })
       const pendingDepositWei = parseInt(pendingDepositHex, 16)
       const pendingDep = pendingDepositWei / 1e6
       setPendingDeposit(pendingDep > 0 ? pendingDep.toFixed(6) : '')
@@ -389,14 +388,14 @@ export default function Home() {
         log(`✅ No pending deposit`)
       }
 
-      // Check pending redeem
-      const pendingRedeemHex = await provider.request({
-        method: 'eth_call',
-        params: [{
-          to: VAULT_ADDRESS,
-          data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address)
-        }, 'latest']
-      })
+      // Check pending redeem (use QuickNode for fresh data in bot mode)
+      const pendingRedeemData = '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address)
+      const pendingRedeemHex = operatorBotEnabled
+        ? await fetchViaQuickNode(pendingRedeemData, VAULT_ADDRESS)
+        : await provider.request({
+            method: 'eth_call',
+            params: [{ to: VAULT_ADDRESS, data: pendingRedeemData }, 'latest']
+          })
       const pendingRedeemWei = parseInt(pendingRedeemHex, 16)
       const pendingRed = pendingRedeemWei / 1e6
       setPendingRedeem(pendingRed > 0 ? pendingRed.toFixed(6) : '')
@@ -404,7 +403,7 @@ export default function Home() {
         log(`⏳ Pending Redeem: ${pendingRed.toFixed(6)} shares`)
       }
 
-      // Check vault's total USDC balance using QuickNode directly (bypasses MetaMask cache)
+      // Check vault's total USDC balance - ALWAYS use QuickNode (critical for market bot updates)
       const vaultUSDCData = '0x70a08231000000000000000000000000' + VAULT_ADDRESS.slice(2) // balanceOf(VAULT_ADDRESS)
       const vaultUSDCHex = await fetchViaQuickNode(vaultUSDCData, USDC_SEPOLIA)
       const vaultUSDCWei = parseInt(vaultUSDCHex, 16)
@@ -509,13 +508,14 @@ export default function Home() {
         // Poll for completion (bot will claim in background)
         const pollInterval = setInterval(async () => {
           await checkVaultBalances()
-          const depositHex = await (window.ethereum as any).request({
-            method: 'eth_call',
-            params: [{
-              to: VAULT_ADDRESS,
-              data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest(address)
-            }, 'latest']
-          })
+          // Use QuickNode in bot mode for fresh data
+          const depositData = '0xc3702989000000000000000000000000' + address.slice(2)
+          const depositHex = operatorBotEnabled
+            ? await fetchViaQuickNode(depositData, VAULT_ADDRESS)
+            : await (window.ethereum as any).request({
+                method: 'eth_call',
+                params: [{ to: VAULT_ADDRESS, data: depositData }, 'latest']
+              })
           const pendingDepositAssets = parseInt(depositHex, 16) / 1e6
           
           if (pendingDepositAssets === 0) {
@@ -567,14 +567,9 @@ export default function Home() {
           provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
         }
 
-        // Force fresh data by using 'latest' tag (cache-busting)
-        const pendingHex = await provider.request({
-          method: 'eth_call',
-          params: [{
-            to: VAULT_ADDRESS,
-            data: '0xc3702989000000000000000000000000' + address.slice(2) // pendingDepositRequest
-          }, 'latest']
-        })
+        // Always use QuickNode for fresh data (self-claim mode still needs cache bypass)
+        const pendingData = '0xc3702989000000000000000000000000' + address.slice(2)
+        const pendingHex = await fetchViaQuickNode(pendingData, VAULT_ADDRESS)
         const pending = parseInt(pendingHex, 16) / 1e6
 
         // If no pending deposit, stop polling (already claimed by bot or self)
@@ -702,13 +697,14 @@ export default function Home() {
         // Poll for completion (bot will claim in background)
         const pollInterval = setInterval(async () => {
           await checkVaultBalances()
-          const redeemHex = await (window.ethereum as any).request({
-            method: 'eth_call',
-            params: [{
-              to: VAULT_ADDRESS,
-              data: '0xaed27577000000000000000000000000' + address.slice(2) // pendingRedeemRequest(address)
-            }, 'latest']
-          })
+          // Use QuickNode in bot mode for fresh data
+          const redeemData = '0x53dc1dd3000000000000000000000000' + address.slice(2)
+          const redeemHex = operatorBotEnabled
+            ? await fetchViaQuickNode(redeemData, VAULT_ADDRESS)
+            : await (window.ethereum as any).request({
+                method: 'eth_call',
+                params: [{ to: VAULT_ADDRESS, data: redeemData }, 'latest']
+              })
           const pendingRedeemShares = parseInt(redeemHex, 16) / 1e6
           
           if (pendingRedeemShares === 0) {
@@ -759,14 +755,9 @@ export default function Home() {
           provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
         }
 
-        // Force fresh data by using 'latest' tag (cache-busting)
-        const pendingHex = await provider.request({
-          method: 'eth_call',
-          params: [{
-            to: VAULT_ADDRESS,
-            data: '0x53dc1dd3000000000000000000000000' + address.slice(2) // pendingRedeemRequest
-          }, 'latest']
-        })
+        // Always use QuickNode for fresh data (self-claim mode still needs cache bypass)
+        const pendingData = '0x53dc1dd3000000000000000000000000' + address.slice(2)
+        const pendingHex = await fetchViaQuickNode(pendingData, VAULT_ADDRESS)
         const pending = parseInt(pendingHex, 16) / 1e6
 
         // If no pending redeem, stop polling (already claimed by bot or self)

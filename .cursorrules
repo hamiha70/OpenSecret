@@ -31,9 +31,11 @@
 
 ### Frontend RPC Strategy (CRITICAL)
 - **Problem:** MetaMask aggressively caches `eth_call` responses, causing stale UI
-- **Solution:** For **critical vault balance data**, use QuickNode RPC directly via `fetch()`
+- **Solution:** Use QuickNode RPC directly via `fetch()` for **ALL contract state reads**
 - **Implementation:**
   ```typescript
+  const QUICKNODE_RPC = 'https://capable-old-patina.ethereum-sepolia.quiknode.pro/...'
+  
   const fetchViaQuickNode = async (data: string, to: string) => {
     const response = await fetch(QUICKNODE_RPC, {
       method: 'POST',
@@ -50,9 +52,16 @@
   }
   ```
 - **When to use:**
-  - ✅ Vault total USDC balance (changes from external bots)
-  - ❌ User-specific data (shares, pending deposits) - MetaMask is fine
-- **Why:** Bypasses MetaMask's caching layer entirely, always returns fresh data
+  - ✅ **ALWAYS** for vault total USDC balance (changes from market bot)
+  - ✅ **In operator bot mode** for shares, pending deposits, pending redeems
+  - ❌ MetaMask is OK for self-claim mode (user-initiated changes only)
+- **Pattern:**
+  ```typescript
+  const dataHex = operatorBotEnabled 
+    ? await fetchViaQuickNode(data, contractAddress)
+    : await provider.request({ method: 'eth_call', params: [{ to, data }, 'latest'] })
+  ```
+- **Why:** Bypasses MetaMask's caching layer entirely, critical when external bots modify state
 
 ## 🔧 Development Conventions
 
