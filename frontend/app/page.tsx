@@ -253,27 +253,15 @@ export default function Home() {
         provider = window.ethereum.providers.find((p: any) => p.isMetaMask) || window.ethereum
       }
 
-      // Check current network
+      // Check current network (but DON'T auto-switch - user may be on different chain for cross-chain deposits!)
       const chainId = await provider.request({ method: 'eth_chainId' })
       log(`Current chain ID: ${chainId}`)
       
       if (chainId !== VAULT_CHAIN_HEX) {
-        log(`Wrong network detected: ${chainId}`)
-        log('Requesting network switch to Arbitrum Sepolia...')
-        
-        try {
-          await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: VAULT_CHAIN_HEX }],
-          })
-          log(`✅ Switched to ${VAULT_CHAIN_NAME} successfully!`)
-          log('Please click "Check USDC" again')
-          setStatus(`Switched to ${VAULT_CHAIN_NAME} - try again`)
-          return
-        } catch (switchError: any) {
-          log(`❌ Failed to switch: ${switchError.message}`)
-          throw new Error(`Wrong network! You're on ${chainId === '0x1' ? 'Mainnet' : chainId}. Please manually switch to ${VAULT_CHAIN_NAME} in MetaMask`)
-        }
+        log(`⚠️ Note: You're on ${chainId}, but vault is on ${VAULT_CHAIN_NAME} (${VAULT_CHAIN_HEX})`)
+        log(`   This is OK for cross-chain deposits!`)
+        // ❌ REMOVED: Auto-switch logic that was breaking Avail widget
+        // The old code would force switch to vault chain, interrupting bridge flow
       }
 
       log(`Calling balanceOf for address: ${address}`)
