@@ -25,6 +25,7 @@ export default function Home() {
   const [crossChainStep, setCrossChainStep] = useState<'idle' | 'switch_needed' | 'bridging' | 'bridge_complete' | 'depositing' | 'complete'>('idle')
   const [showDirectDeposit, setShowDirectDeposit] = useState(false)
   const [currentChainId, setCurrentChainId] = useState<string | null>(null)
+  const [startingChainId, setStartingChainId] = useState<string | null>(null) // Track where user started
   const lastUSDCBalanceRef = useRef<number | null>(null)
   
   // Progress tracking for better UX
@@ -102,9 +103,11 @@ export default function Home() {
       
       const chainId = await provider.request({ method: 'eth_chainId' })
       setCurrentChainId(chainId)
+      setStartingChainId(chainId) // Remember where user started
       
       log(`✅ Connected: ${userAddress}`)
       log(`   Chain ID: ${chainId}`)
+      log(`   🏠 Starting chain saved: ${chainId}`)
       
       if (chainId !== '0xaa36a7') {
         log('⚠️ Warning: Not on Sepolia')
@@ -517,6 +520,19 @@ export default function Home() {
               await depositToVault(crossChainAmount)
               setCrossChainStep('complete')
               log('🎉 Auto-deposit complete!')
+              
+              // Return user to their starting chain
+              if (startingChainId && startingChainId !== '0xaa36a7') {
+                const startChainName = getChainName(
+                  startingChainId === '0x66eee' ? 'arbitrum-sepolia' :
+                  startingChainId === '0x14a34' ? 'base-sepolia' :
+                  startingChainId === '0xaa37' ? 'optimism-sepolia' :
+                  startingChainId === '0x13882' ? 'polygon-amoy' : 'sepolia'
+                )
+                log(`🏠 Returning to starting chain: ${startChainName}`)
+                await switchToChain(startingChainId, startChainName)
+              }
+              
               setTimeout(() => {
                 setCrossChainStep('idle')
                 setCrossChainAmount('')
@@ -1203,13 +1219,57 @@ export default function Home() {
             </div>
           )}
 
-          {/* Step 2: Check USDC */}
+          {/* Step 2: Check USDC & Switch Chain */}
           <div className="border rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Step 2: Check USDC Balance</h2>
+            <h2 className="text-xl font-semibold mb-4">Step 2: Check USDC Balance & Switch Chain</h2>
+            
+            {/* Manual Chain Switcher */}
+            <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+              <h3 className="font-semibold mb-2 text-sm">🔄 Manual Chain Switcher</h3>
+              <p className="text-xs text-gray-600 mb-3">Switch to any Avail-supported chain</p>
+              <div className="flex gap-2">
+                <select
+                  id="manualChainSelect"
+                  className="flex-1 border rounded px-3 py-2 text-sm"
+                  defaultValue="arbitrum-sepolia"
+                >
+                  <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+                  <option value="optimism-sepolia">Optimism Sepolia</option>
+                  <option value="polygon-amoy">Polygon Amoy</option>
+                  <option value="base-sepolia">Base Sepolia</option>
+                  <option value="sepolia">Ethereum Sepolia</option>
+                </select>
+                <button
+                  onClick={async () => {
+                    const select = document.getElementById('manualChainSelect') as HTMLSelectElement
+                    const targetChain = select.value as any
+                    const chainId = getChainIdForSource(targetChain)
+                    const chainName = getChainName(targetChain)
+                    await switchToChain(chainId, chainName)
+                  }}
+                  disabled={!connected}
+                  className="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 disabled:bg-gray-300"
+                >
+                  Switch
+                </button>
+              </div>
+              {currentChainId && (
+                <p className="text-xs text-gray-600 mt-2">
+                  Currently on: <span className="font-semibold">{
+                    currentChainId === '0x66eee' ? 'Arbitrum Sepolia' :
+                    currentChainId === '0x14a34' ? 'Base Sepolia' :
+                    currentChainId === '0xaa37' ? 'Optimism Sepolia' :
+                    currentChainId === '0x13882' ? 'Polygon Amoy' :
+                    currentChainId === '0xaa36a7' ? 'Ethereum Sepolia' : currentChainId
+                  }</span>
+                </p>
+              )}
+            </div>
+            
             <button
               onClick={checkUSDC}
               disabled={!connected}
-              className="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="w-full bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Check USDC
             </button>
@@ -1564,6 +1624,19 @@ export default function Home() {
                             await depositToVault(crossChainAmount)
                             setCrossChainStep('complete')
                             log('✅ Cross-chain deposit complete!')
+                            
+                            // Return user to their starting chain
+                            if (startingChainId && startingChainId !== '0xaa36a7') {
+                              const startChainName = getChainName(
+                                startingChainId === '0x66eee' ? 'arbitrum-sepolia' :
+                                startingChainId === '0x14a34' ? 'base-sepolia' :
+                                startingChainId === '0xaa37' ? 'optimism-sepolia' :
+                                startingChainId === '0x13882' ? 'polygon-amoy' : 'sepolia'
+                              )
+                              log(`🏠 Returning to starting chain: ${startChainName}`)
+                              await switchToChain(startingChainId, startChainName)
+                            }
+                            
                             setTimeout(() => {
                               setCrossChainStep('idle')
                               setCrossChainAmount('')
