@@ -1406,9 +1406,9 @@ export default function Home() {
                     )}
                     
                     {/* Step 1: Bridge from source chain (ALWAYS show if different from vault chain AND on correct chain) */}
-                    {/* ✅ FIX: Removed 'sourceChain !== arbitrum-sepolia' check - let user bridge from ANY chain! */}
+                    {/* ✅ FIX: Show bridge button even during bridging to prevent widget from unmounting! */}
                     {(() => {
-                      const shouldShow = crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && getChainIdForSource(sourceChain) !== VAULT_CHAIN_HEX
+                      const shouldShow = (crossChainStep === 'idle' || crossChainStep === 'bridging') && currentChainId === getChainIdForSource(sourceChain) && getChainIdForSource(sourceChain) !== VAULT_CHAIN_HEX
                       console.log('🔍 BridgeButton render check:', {
                         crossChainStep,
                         currentChainId,
@@ -1480,10 +1480,11 @@ export default function Home() {
                                   setCrossChainStep('idle')
                                 }
                               }}
-                              disabled={isLoading || !crossChainAmount || parseFloat(crossChainAmount) <= 0}
+                              disabled={isLoading || crossChainStep === 'bridging' || !crossChainAmount || parseFloat(crossChainAmount) <= 0}
                               className="w-full bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
                             >
-                              {isLoading ? '⏳ Loading Bridge...' : operatorBotEnabled 
+                              {crossChainStep === 'bridging' ? '⏳ Complete bridge in widget...' :
+                               isLoading ? '⏳ Loading Bridge...' : operatorBotEnabled 
                                 ? `🤖 Bridge + Auto-Deposit from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sep.' : 
                                                                      sourceChain === 'base-sepolia' ? 'Base Sep.' :
                                                                      sourceChain === 'optimism-sepolia' ? 'Optimism Sep.' :
