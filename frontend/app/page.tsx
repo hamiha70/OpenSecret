@@ -547,15 +547,11 @@ export default function Home() {
 
       // Step 1: Check if approval is needed
       log('1️⃣ Checking USDC approval...')
-      const allowanceHex = await provider.request({
-        method: 'eth_call',
-        params: [{
-          to: VAULT_USDC_ADDRESS, // ✅ FIX: Use dynamic USDC address for vault's chain
-          data: '0xdd62ed3e' + // allowance(address,address)
-                address.slice(2).padStart(64, '0') + // owner
-                VAULT_ADDRESS.slice(2).padStart(64, '0') // spender
-        }, 'latest']
-      })
+      // CRITICAL: Use QuickNode to bypass MetaMask's aggressive caching
+      const allowanceData = '0xdd62ed3e' + // allowance(address,address)
+                            address.slice(2).padStart(64, '0') + // owner
+                            VAULT_ADDRESS.slice(2).padStart(64, '0') // spender
+      const allowanceHex = await fetchViaQuickNode(allowanceData, VAULT_USDC_ADDRESS)
       const currentAllowance = parseInt(allowanceHex, 16)
       log(`   Current allowance: ${(currentAllowance / 1e6).toFixed(2)} USDC`)
 
