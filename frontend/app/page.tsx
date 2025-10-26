@@ -444,6 +444,8 @@ export default function Home() {
       }
 
       log(`🔄 Switching to ${chainName}...`)
+      setStatus(`Switching to ${chainName}...`)
+      
       await provider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId }],
@@ -451,13 +453,22 @@ export default function Home() {
       
       setCurrentChainId(chainId)
       log(`✅ Switched to ${chainName}`)
+      setStatus(`✅ Switched to ${chainName}`)
       return true
     } catch (error: any) {
       if (error.code === 4902) {
         log(`⚠️ ${chainName} not added to MetaMask`)
-        // Could add the chain here, but for testnets user should add manually
+        log(`   Please add this chain to MetaMask manually first`)
+        setStatus(`❌ ${chainName} not in MetaMask - please add it first`)
+        
+        // Show helpful alert
+        alert(`⚠️ Chain Not Found\n\n${chainName} is not added to your MetaMask.\n\nPlease add it manually:\n1. Go to chainlist.org\n2. Search for "${chainName}"\n3. Click "Add to MetaMask"\n4. Try switching again`)
+      } else if (error.code === 4001) {
+        log(`❌ User rejected chain switch`)
+        setStatus('Chain switch cancelled')
       } else {
         log(`❌ Failed to switch: ${error.message}`)
+        setStatus(`❌ Switch failed: ${error.message}`)
       }
       return false
     }
@@ -1231,13 +1242,13 @@ export default function Home() {
                 <select
                   id="manualChainSelect"
                   className="flex-1 border rounded px-3 py-2 text-sm"
-                  defaultValue="arbitrum-sepolia"
+                  defaultValue="base-sepolia"
                 >
-                  <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+                  <option value="base-sepolia">Base Sepolia (Most Common)</option>
                   <option value="optimism-sepolia">Optimism Sepolia</option>
-                  <option value="polygon-amoy">Polygon Amoy</option>
-                  <option value="base-sepolia">Base Sepolia</option>
                   <option value="sepolia">Ethereum Sepolia</option>
+                  <option value="arbitrum-sepolia">Arbitrum Sepolia (Add via Chainlist)</option>
+                  <option value="polygon-amoy">Polygon Amoy (Add via Chainlist)</option>
                 </select>
                 <button
                   onClick={async () => {
@@ -1264,6 +1275,9 @@ export default function Home() {
                   }</span>
                 </p>
               )}
+              <p className="text-xs text-amber-600 mt-2">
+                💡 If switch fails: Add chain via <a href="https://chainlist.org" target="_blank" className="underline font-semibold">chainlist.org</a>
+              </p>
             </div>
             
             <button
