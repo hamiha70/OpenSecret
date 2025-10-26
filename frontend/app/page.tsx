@@ -24,6 +24,7 @@ export default function Home() {
   const [crossChainAmount, setCrossChainAmount] = useState('')
   const [crossChainStep, setCrossChainStep] = useState<'idle' | 'bridging' | 'bridge_complete' | 'depositing' | 'complete'>('idle')
   const [showDirectDeposit, setShowDirectDeposit] = useState(false)
+  const lastUSDCBalanceRef = useRef<number | null>(null)
   
   // Progress tracking for better UX
   const [depositProgress, setDepositProgress] = useState<'idle' | 'checking' | 'approving' | 'requesting' | 'waiting_claim' | 'claiming' | 'success'>('idle')
@@ -421,6 +422,69 @@ export default function Home() {
     } catch (error: any) {
       log(`❌ Vault balance error: ${error.message}`)
     }
+  }
+
+  // Auto-trigger: Poll for balance increase and auto-deposit
+  const startAutoDepositPolling = () => {
+    log('🤖 Auto-deposit mode: Polling for balance increase...')
+    log('   Will auto-deposit when bridge completes')
+    
+    const pollInterval = setInterval(async () => {
+      if (!address || crossChainStep !== 'bridging') {
+        clearInterval(pollInterval)
+        return
+      }
+
+      try {
+        // Fetch current USDC balance via QuickNode (bypass cache)
+        const balanceData = '0x70a08231000000000000000000000000' + address.slice(2)
+        const balanceHex = await fetchViaQuickNode(balanceData, USDC_SEPOLIA)
+        const currentBalance = parseInt(balanceHex, 16) / 1e6
+
+        if (lastUSDCBalanceRef.current === null) {
+          // First poll - store initial balance
+          lastUSDCBalanceRef.current = currentBalance
+          log(`   📊 Initial USDC balance: ${currentBalance.toFixed(6)} USDC`)
+        } else {
+          // Check if balance increased
+          const increase = currentBalance - lastUSDCBalanceRef.current
+          
+          if (increase > 0.01) { // Threshold: at least 0.01 USDC increase
+            log(`   ✅ Balance increased by ${increase.toFixed(6)} USDC!`)
+            log(`   🚀 Auto-triggering vault deposit...`)
+            clearInterval(pollInterval)
+            
+            setCrossChainStep('depositing')
+            try {
+              await depositToVault(crossChainAmount)
+              setCrossChainStep('complete')
+              log('🎉 Auto-deposit complete!')
+              setTimeout(() => {
+                setCrossChainStep('idle')
+                setCrossChainAmount('')
+                lastUSDCBalanceRef.current = null
+              }, 3000)
+            } catch (err: any) {
+              log(`❌ Auto-deposit error: ${err.message}`)
+              setCrossChainStep('bridge_complete') // Fall back to manual
+              lastUSDCBalanceRef.current = null
+            }
+          }
+        }
+      } catch (err: any) {
+        log(`⚠️ Polling error: ${err.message}`)
+      }
+    }, 5000) // Poll every 5 seconds
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      clearInterval(pollInterval)
+      if (crossChainStep === 'bridging') {
+        log('⏱️ Auto-deposit timeout - falling back to manual mode')
+        setCrossChainStep('bridge_complete')
+        lastUSDCBalanceRef.current = null
+      }
+    }, 300000) // 5 minutes
   }
 
   const depositToVault = async (amount: string) => {
@@ -1360,10 +1424,17 @@ export default function Home() {
                                 await onClick()
                                 
                                 log('✅ Bridge widget opened!')
-                                log('⏳ Complete the bridge in Avail Nexus widget')
-                                log('   Then click "Complete Deposit" button below')
-                                setStatus('Complete bridge, then click "Complete Deposit"')
-                                setCrossChainStep('bridge_complete')
+                                
+                                if (operatorBotEnabled) {
+                                  log('🤖 Auto-deposit mode: Will detect bridge completion automatically')
+                                  setStatus('Complete bridge - will auto-deposit when done')
+                                  startAutoDepositPolling()
+                                } else {
+                                  log('⏳ Complete the bridge in Avail Nexus widget')
+                                  log('   Then click "Complete Deposit" button below')
+                                  setStatus('Complete bridge, then click "Complete Deposit"')
+                                  setCrossChainStep('bridge_complete')
+                                }
                               } catch (err: any) {
                                 log(`❌ Bridge error: ${err.message}`)
                                 setStatus(`Bridge failed: ${err.message}`)
@@ -1373,14 +1444,17 @@ export default function Home() {
                             disabled={isLoading || !crossChainAmount || parseFloat(crossChainAmount) <= 0}
                             className="w-full bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
                           >
-                            {isLoading ? '⏳ Loading Bridge...' : `🌉 Step 1: Bridge from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' : 'Base Sepolia'}`}
+                            {isLoading ? '⏳ Loading Bridge...' : operatorBotEnabled 
+                              ? `🤖 Bridge + Auto-Deposit from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' : 'Base Sepolia'}`
+                              : `🌉 Step 1: Bridge from ${sourceChain === 'arbitrum-sepolia' ? 'Arbitrum Sepolia' : 'Base Sepolia'}`
+                            }
                           </button>
                         )}
                       </BridgeButton>
                     )}
                     
-                    {/* Step 2: Deposit to vault (after bridge complete OR if source is Sepolia) */}
-                    {(crossChainStep === 'bridge_complete' || sourceChain === 'sepolia') && crossChainStep !== 'depositing' && crossChainStep !== 'complete' && (
+                    {/* Step 2: Deposit to vault (after bridge complete OR if source is Sepolia) - MANUAL MODE ONLY */}
+                    {!operatorBotEnabled && (crossChainStep === 'bridge_complete' || sourceChain === 'sepolia') && crossChainStep !== 'depositing' && crossChainStep !== 'complete' && (
                       <button
                         onClick={async () => {
                           setCrossChainStep('depositing')
@@ -1411,10 +1485,22 @@ export default function Home() {
                     {crossChainStep !== 'idle' && (
                       <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-sm">
                         <p className="font-semibold text-blue-900">
-                          {crossChainStep === 'bridging' && '🌉 Opening Avail bridge widget...'}
+                          {crossChainStep === 'bridging' && operatorBotEnabled && '🤖 Bridge widget opened - polling for completion...'}
+                          {crossChainStep === 'bridging' && !operatorBotEnabled && '🌉 Opening Avail bridge widget...'}
                           {crossChainStep === 'bridge_complete' && '✅ Bridge initiated! Click "Complete Deposit" below'}
-                          {crossChainStep === 'depositing' && '⏳ Depositing to vault...'}
+                          {crossChainStep === 'depositing' && operatorBotEnabled && '🤖 Auto-depositing to vault...'}
+                          {crossChainStep === 'depositing' && !operatorBotEnabled && '⏳ Depositing to vault...'}
                           {crossChainStep === 'complete' && '🎉 Cross-chain deposit complete!'}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Avail failure fallback message */}
+                    {crossChainStep === 'bridge_complete' && !operatorBotEnabled && (
+                      <div className="p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm">
+                        <p className="font-semibold text-yellow-800">💡 If bridge failed:</p>
+                        <p className="text-xs text-gray-700 mt-1">
+                          No problem! Use the "Show Direct Deposit" option below to deposit USDC that's already on Sepolia.
                         </p>
                       </div>
                     )}
@@ -1424,6 +1510,7 @@ export default function Home() {
                       <button
                         onClick={() => {
                           setCrossChainStep('idle')
+                          lastUSDCBalanceRef.current = null
                           log('🔄 Cross-chain deposit flow reset')
                         }}
                         className="w-full bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 text-sm"
