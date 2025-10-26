@@ -60,8 +60,14 @@ export default function Home() {
     console.log(message)
   }
 
-  // QuickNode RPC helper to bypass MetaMask caching (Arbitrum Sepolia)
-  const QUICKNODE_RPC = 'https://snowy-cold-shape.arbitrum-sepolia.quiknode.pro/b6e70011263de6b0ff88303b0105a0ff56450586/'
+  // QuickNode RPC helper to bypass MetaMask caching
+  // Dynamically select RPC based on vault's deployment chain
+  const QUICKNODE_RPC = VAULT_CHAIN_ID === 421614 
+    ? (process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC || '')
+    : VAULT_CHAIN_ID === 11155111
+      ? (process.env.NEXT_PUBLIC_ETHEREUM_SEPOLIA_RPC || '')
+      : (process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || '') // Default fallback
+  
   const fetchViaQuickNode = async (data: string, to: string) => {
     const response = await fetch(QUICKNODE_RPC, {
       method: 'POST',
