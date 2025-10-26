@@ -109,14 +109,14 @@ export default function Home() {
       log(`   Chain ID: ${chainId}`)
       log(`   🏠 Starting chain saved: ${chainId}`)
       
-      if (chainId !== 'VAULT_CHAIN_HEX') {
-        log('⚠️ Warning: Not on Arbitrum Sepolia')
+      if (chainId !== VAULT_CHAIN_HEX) {
+        log(`⚠️ Warning: Not on ${VAULT_CHAIN_NAME}`)
         log(`   Current network: ${chainId}`)
         log('   This is OK for cross-chain deposits!')
         setStatus(`Connected to ${chainId}`)
       } else {
-        log('✅ Correct network: Arbitrum Sepolia')
-        setStatus('Connected to Arbitrum Sepolia')
+        log(`✅ Correct network: ${VAULT_CHAIN_NAME}`)
+        setStatus(`Connected to ${VAULT_CHAIN_NAME}`)
       }
       
       // Listen for chain changes
@@ -271,7 +271,7 @@ export default function Home() {
       try {
         await provider.request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: 'VAULT_CHAIN_HEX' }], // Arbitrum Sepolia
+          params: [{ chainId: VAULT_CHAIN_HEX }], // Arbitrum Sepolia
         })
         log('✅ Switched back to Ethereum Sepolia')
       } catch (switchError: any) {
@@ -304,14 +304,14 @@ export default function Home() {
       const chainId = await provider.request({ method: 'eth_chainId' })
       log(`Current chain ID: ${chainId}`)
       
-      if (chainId !== 'VAULT_CHAIN_HEX') {
+      if (chainId !== VAULT_CHAIN_HEX) {
         log(`Wrong network detected: ${chainId}`)
         log('Requesting network switch to Arbitrum Sepolia...')
         
         try {
           await provider.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: 'VAULT_CHAIN_HEX' }],
+            params: [{ chainId: VAULT_CHAIN_HEX }],
           })
           log('✅ Switched to Arbitrum Sepolia successfully!')
           log('Please click "Check PYUSD" again')
@@ -476,12 +476,12 @@ export default function Home() {
 
   const getChainIdForSource = (source: string): string => {
     switch(source) {
-      case 'arbitrum-sepolia': return 'VAULT_CHAIN_HEX'  // 421614
+      case 'arbitrum-sepolia': return VAULT_CHAIN_HEX  // 421614
       case 'base-sepolia': return '0x14a34'      // 84532
       case 'optimism-sepolia': return '0xaa37'   // 11155420
       case 'polygon-amoy': return '0x13882'      // 80002
-      case 'sepolia': return 'VAULT_CHAIN_HEX'          // 11155111
-      default: return 'VAULT_CHAIN_HEX'
+      case 'sepolia': return '0xaa36a7'          // 11155111 (Ethereum Sepolia)
+      default: return VAULT_CHAIN_HEX
     }
   }
 
@@ -533,9 +533,9 @@ export default function Home() {
               log('🎉 Auto-deposit complete!')
               
               // Return user to their starting chain
-              if (startingChainId && startingChainId !== 'VAULT_CHAIN_HEX') {
+              if (startingChainId && startingChainId !== VAULT_CHAIN_HEX) {
                 const startChainName = getChainName(
-                  startingChainId === 'VAULT_CHAIN_HEX' ? 'arbitrum-sepolia' :
+                  startingChainId === VAULT_CHAIN_HEX ? 'arbitrum-sepolia' :
                   startingChainId === '0x14a34' ? 'base-sepolia' :
                   startingChainId === '0xaa37' ? 'optimism-sepolia' :
                   startingChainId === '0x13882' ? 'polygon-amoy' : 'sepolia'
@@ -1267,11 +1267,11 @@ export default function Home() {
               {currentChainId && (
                 <p className="text-xs text-gray-600 mt-2">
                   Currently on: <span className="font-semibold">{
-                    currentChainId === 'VAULT_CHAIN_HEX' ? VAULT_CHAIN_NAME :
+                    currentChainId === VAULT_CHAIN_HEX ? VAULT_CHAIN_NAME :
                     currentChainId === '0x14a34' ? 'Base Sepolia' :
                     currentChainId === '0xaa37' ? 'Optimism Sepolia' :
                     currentChainId === '0x13882' ? 'Polygon Amoy' :
-                    currentChainId === 'VAULT_CHAIN_HEX' ? 'Ethereum Sepolia' : currentChainId
+                    currentChainId === VAULT_CHAIN_HEX ? 'Ethereum Sepolia' : currentChainId
                   }</span>
                 </p>
               )}
@@ -1588,7 +1588,7 @@ export default function Home() {
                                   log('🤖 Auto-deposit mode: Will detect bridge completion automatically')
                                   setStatus('Complete bridge - will auto-deposit when done')
                                   // Switch back to Arbitrum Sepolia for polling
-                                  await switchToChain('VAULT_CHAIN_HEX', VAULT_CHAIN_NAME)
+                                  await switchToChain(VAULT_CHAIN_HEX, VAULT_CHAIN_NAME)
                                   startAutoDepositPolling()
                                 } else {
                                   log('⏳ Complete the bridge in Avail Nexus widget')
@@ -1630,9 +1630,9 @@ export default function Home() {
                           log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
                           try {
                             // Ensure we're on Arbitrum Sepolia for vault deposit
-                            if (currentChainId !== 'VAULT_CHAIN_HEX') {
+                            if (currentChainId !== VAULT_CHAIN_HEX) {
                               log('🔄 Switching back to Arbitrum Sepolia for vault deposit...')
-                              await switchToChain('VAULT_CHAIN_HEX', VAULT_CHAIN_NAME)
+                              await switchToChain(VAULT_CHAIN_HEX, VAULT_CHAIN_NAME)
                             }
                             
                             await depositToVault(crossChainAmount)
@@ -1640,9 +1640,9 @@ export default function Home() {
                             log('✅ Cross-chain deposit complete!')
                             
                             // Return user to their starting chain
-                            if (startingChainId && startingChainId !== 'VAULT_CHAIN_HEX') {
+                            if (startingChainId && startingChainId !== VAULT_CHAIN_HEX) {
                               const startChainName = getChainName(
-                                startingChainId === 'VAULT_CHAIN_HEX' ? 'arbitrum-sepolia' :
+                                startingChainId === VAULT_CHAIN_HEX ? 'arbitrum-sepolia' :
                                 startingChainId === '0x14a34' ? 'base-sepolia' :
                                 startingChainId === '0xaa37' ? 'optimism-sepolia' :
                                 startingChainId === '0x13882' ? 'polygon-amoy' : 'sepolia'
