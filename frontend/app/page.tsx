@@ -444,10 +444,10 @@ export default function Home() {
   // Auto-trigger: Poll for balance increase and auto-deposit (Hybrid approach)
   const startAutoDepositPolling = () => {
     log('🤖 Auto-deposit mode: Polling for balance increase...')
-    log('   Will auto-deposit when bridge completes (polling for 3 minutes)')
+    log('   Will auto-deposit when bridge completes (polling for 10 minutes)')
     
     let pollCount = 0
-    const maxPolls = 36 // 3 minutes / 5 seconds = 36 polls
+    const maxPolls = 120 // 10 minutes / 5 seconds = 120 polls (Avail bridges can take 5-10 mins on testnets)
     
     const pollInterval = setInterval(async () => {
       pollCount++
@@ -507,8 +507,8 @@ export default function Home() {
               lastUSDCBalanceRef.current = null
             }
           } else if (pollCount >= maxPolls) {
-            // Timeout after 3 minutes - fall back to manual mode
-            log('⏱️ Auto-deposit timeout (3 minutes) - falling back to manual mode')
+            // Timeout after 10 minutes - fall back to manual mode
+            log('⏱️ Auto-deposit timeout (10 minutes) - falling back to manual mode')
             log('   Bridge may still be processing - click "Complete Deposit" when ready')
             clearInterval(pollInterval)
             setCrossChainStep('bridge_complete')
@@ -517,7 +517,7 @@ export default function Home() {
           } else if (pollCount % 6 === 0) {
             // Log progress every 30 seconds (6 polls * 5 seconds)
             const elapsed = Math.floor(pollCount * 5 / 60)
-            const remaining = 3 - elapsed
+            const remaining = 10 - elapsed
             log(`   ⏳ Still polling... (${elapsed}m elapsed, ${remaining}m remaining)`)
           }
         }
