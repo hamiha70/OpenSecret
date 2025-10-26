@@ -49,7 +49,7 @@ export default function Home() {
     console.log(message)
   }
 
-  // QuickNode RPC helper to bypass MetaMask caching (Arbitrum Arbitrum Sepolia)
+  // QuickNode RPC helper to bypass MetaMask caching (Arbitrum Sepolia)
   const QUICKNODE_RPC = 'https://snowy-cold-shape.arbitrum-sepolia.quiknode.pro/b6e70011263de6b0ff88303b0105a0ff56450586/'
   const fetchViaQuickNode = async (data: string, to: string) => {
     const response = await fetch(QUICKNODE_RPC, {
@@ -67,8 +67,8 @@ export default function Home() {
   }
 
   useEffect(() => {
-    log('🚀 AsyncVault on Arbitrum Arbitrum Sepolia - Ready!')
-    log('Make sure MetaMask is installed and you are on Arbitrum Arbitrum Sepolia')
+    log('🚀 AsyncVault on Arbitrum Sepolia - Ready!')
+    log('Make sure MetaMask is installed and you are on Arbitrum Sepolia')
     log('Get testnet USDC from: https://faucet.circle.com/ (or bridge from other chains)')
     setStatus('Ready to test')
   }, [])
@@ -226,25 +226,25 @@ export default function Home() {
       const chainId = await provider.request({ method: 'eth_chainId' })
       log(`Current chain: ${chainId}`)
 
-      // Switch to Base Arbitrum Sepolia if needed
-      if (chainId !== '0x14a34') { // Base Arbitrum Sepolia chain ID (84532 = 0x14a34)
-        log('⚠️  Not on Base Arbitrum Sepolia - switching networks...')
+      // Switch to Base Sepolia if needed
+      if (chainId !== '0x14a34') { // Base Sepolia chain ID (84532 = 0x14a34)
+        log('⚠️  Not on Base Sepolia - switching networks...')
         try {
           await provider.request({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x14a34' }],
           })
-          log('✅ Switched to Base Arbitrum Sepolia successfully!')
+          log('✅ Switched to Base Sepolia successfully!')
         } catch (switchError: any) {
           log(`❌ Failed to switch: ${switchError.message}`)
-          throw new Error(`Wrong network! Please switch to Base Arbitrum Sepolia in MetaMask`)
+          throw new Error(`Wrong network! Please switch to Base Sepolia in MetaMask`)
         }
       }
 
       // Approve max uint256 for unlimited spending
       const maxApproval = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
       
-      log('💰 Approving unlimited USDC for Avail bridge on Base Arbitrum Sepolia...')
+      log('💰 Approving unlimited USDC for Avail bridge on Base Sepolia...')
       log('   (This is a one-time approval for cross-chain bridging)')
       log('⚠️  Note: Avail bridge address is placeholder - will be updated in Phase 3')
       
@@ -260,12 +260,12 @@ export default function Home() {
         }]
       })
       
-      log(`📤 Approval tx on Base Arbitrum Sepolia: ${approveTx}`)
+      log(`📤 Approval tx on Base Sepolia: ${approveTx}`)
       log('⏳ Waiting for confirmation...')
       await waitForTransaction(provider, approveTx)
       
       log('✅ USDC approved for Avail bridge! You can now bridge from Base → Arbitrum Sepolia')
-      log('💡 Switching back to Ethereum Arbitrum Sepolia for vault operations...')
+      log('💡 Switching back to Ethereum Sepolia for vault operations...')
       
       // Switch back to Arbitrum Sepolia
       try {
@@ -273,9 +273,9 @@ export default function Home() {
           method: 'wallet_switchEthereumChain',
           params: [{ chainId: 'VAULT_CHAIN_HEX' }], // Arbitrum Sepolia
         })
-        log('✅ Switched back to Ethereum Arbitrum Sepolia')
+        log('✅ Switched back to Ethereum Sepolia')
       } catch (switchError: any) {
-        log('⚠️  Please manually switch back to Ethereum Arbitrum Sepolia')
+        log('⚠️  Please manually switch back to Ethereum Sepolia')
       }
       
       setStatus('✅ USDC approved for Avail bridge')
@@ -487,11 +487,11 @@ export default function Home() {
 
   const getChainName = (source: string): string => {
     switch(source) {
-      case 'arbitrum-sepolia': return VAULT_CHAIN_NAME
-      case 'base-sepolia': return 'Base Arbitrum Sepolia'
-      case 'optimism-sepolia': return 'Optimism Arbitrum Sepolia'
+      case 'arbitrum-sepolia': return 'Arbitrum Sepolia'
+      case 'base-sepolia': return 'Base Sepolia'
+      case 'optimism-sepolia': return 'Optimism Sepolia'
       case 'polygon-amoy': return 'Polygon Amoy'
-      case 'sepolia': return VAULT_CHAIN_NAME
+      case 'sepolia': return 'Ethereum Sepolia'
       default: return source
     }
   }
@@ -1244,10 +1244,10 @@ export default function Home() {
                   className="flex-1 border rounded px-3 py-2 text-sm"
                   defaultValue="base-sepolia"
                 >
-                  <option value="base-sepolia">Base Arbitrum Sepolia (Most Common)</option>
-                  <option value="optimism-sepolia">Optimism Arbitrum Sepolia</option>
-                  <option value="sepolia">Ethereum Arbitrum Sepolia</option>
-                  <option value="arbitrum-sepolia">Arbitrum Arbitrum Sepolia (Add via Chainlist)</option>
+                  <option value="base-sepolia">Base Sepolia (Most Common)</option>
+                  <option value="optimism-sepolia">Optimism Sepolia</option>
+                  <option value="sepolia">Ethereum Sepolia</option>
+                  <option value="arbitrum-sepolia">Arbitrum Sepolia (Add via Chainlist)</option>
                   <option value="polygon-amoy">Polygon Amoy (Add via Chainlist)</option>
                 </select>
                 <button
@@ -1268,10 +1268,10 @@ export default function Home() {
                 <p className="text-xs text-gray-600 mt-2">
                   Currently on: <span className="font-semibold">{
                     currentChainId === 'VAULT_CHAIN_HEX' ? VAULT_CHAIN_NAME :
-                    currentChainId === '0x14a34' ? 'Base Arbitrum Sepolia' :
-                    currentChainId === '0xaa37' ? 'Optimism Arbitrum Sepolia' :
+                    currentChainId === '0x14a34' ? 'Base Sepolia' :
+                    currentChainId === '0xaa37' ? 'Optimism Sepolia' :
                     currentChainId === '0x13882' ? 'Polygon Amoy' :
-                    currentChainId === 'VAULT_CHAIN_HEX' ? 'Ethereum Arbitrum Sepolia' : currentChainId
+                    currentChainId === 'VAULT_CHAIN_HEX' ? 'Ethereum Sepolia' : currentChainId
                   }</span>
                 </p>
               )}
@@ -1326,7 +1326,7 @@ export default function Home() {
                 <div className="p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
                   <p className="font-semibold text-blue-900 mb-2">🌉 Cross-Chain Bridge (Avail Nexus)</p>
                   <p className="text-sm text-blue-800 mb-3">
-                    Approve USDC on Base Arbitrum Sepolia for automatic bridging to Arbitrum Sepolia!
+                    Approve USDC on Base Sepolia for automatic bridging to Arbitrum Sepolia!
                   </p>
                   <button
                     onClick={approveUSDCForAvailBridge}
@@ -1335,7 +1335,7 @@ export default function Home() {
                     🌉 Approve USDC (Avail Bridge)
                   </button>
                   <p className="text-xs text-gray-600 mt-2">
-                    💡 This switches to Base Arbitrum Sepolia, approves USDC for the Avail bridge, then switches back
+                    💡 This switches to Base Sepolia, approves USDC for the Avail bridge, then switches back
                   </p>
                   <p className="text-xs text-amber-600 mt-1">
                     ⚠️  Coming in Phase 3 - bridge address is placeholder for now
@@ -1357,7 +1357,7 @@ export default function Home() {
                 <BridgeButton
                   prefill={{
                     fromChainId: 11155111, // Arbitrum Sepolia
-                    toChainId: 421614, // Arbitrum Arbitrum Sepolia (corrected chain ID)
+                    toChainId: 421614, // Arbitrum Sepolia (corrected chain ID)
                     token: 'USDC', // USDC is officially supported!
                     amount: '0.1' // Start with small test amount
                   } as any}
@@ -1372,7 +1372,7 @@ export default function Home() {
                           log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
                           log('📊 Bridge Config:')
                           log('   • From: Arbitrum Sepolia (11155111)')
-                          log('   • To: Arbitrum Arbitrum Sepolia (421614)')
+                          log('   • To: Arbitrum Sepolia (421614)')
                           log('   • Token: USDC (officially supported)')
                           log('   • Amount: 0.1 USDC')
                           log('   • Total USDC: ' + usdcBalance + ' available')
@@ -1422,7 +1422,7 @@ export default function Home() {
                     <ul className="list-disc list-inside space-y-1 text-gray-700">
                       <li>Current USDC balance: {usdcBalance} on Arbitrum Sepolia</li>
                       <li>Test amount: 0.1 USDC (you can change this)</li>
-                      <li>Destination: Arbitrum Arbitrum Sepolia (chain ID 421614)</li>
+                      <li>Destination: Arbitrum Sepolia (chain ID 421614)</li>
                       <li>✅ USDC is officially supported by Avail (PYUSD is not)</li>
                       <li>Avail Nexus aggregates liquidity across chains</li>
                     </ul>
@@ -1431,9 +1431,9 @@ export default function Home() {
                   <div className="p-4 bg-green-50 border-l-4 border-green-400 rounded text-sm">
                     <p className="font-semibold text-green-800 mb-2">✅ Most Stable Routes (Tested):</p>
                     <ul className="list-disc list-inside space-y-1 text-gray-700">
-                      <li><strong>Arbitrum Sepolia ↔ Arbitrum Arbitrum Sepolia</strong> - Recommended</li>
+                      <li><strong>Arbitrum Sepolia ↔ Arbitrum Sepolia</strong> - Recommended</li>
                       <li><strong>Arbitrum Sepolia ↔ Arbitrum Sepolia</strong> - Also stable</li>
-                      <li>⚠️ Base Arbitrum Sepolia - Less stable, may fail</li>
+                      <li>⚠️ Base Sepolia - Less stable, may fail</li>
                     </ul>
                   </div>
                   
@@ -1503,11 +1503,11 @@ export default function Home() {
                         className="w-full border rounded px-3 py-2 bg-white"
                         disabled={crossChainStep !== 'idle'}
                       >
-                        <option value="arbitrum-sepolia">Arbitrum Arbitrum Sepolia (Most Stable ✅)</option>
+                        <option value="arbitrum-sepolia">Arbitrum Sepolia (Most Stable ✅)</option>
                         <option value="sepolia">Arbitrum Sepolia (Same chain, direct deposit)</option>
-                        <option value="optimism-sepolia">Optimism Arbitrum Sepolia</option>
+                        <option value="optimism-sepolia">Optimism Sepolia</option>
                         <option value="polygon-amoy">Polygon Amoy Testnet</option>
-                        <option value="base-sepolia">Base Arbitrum Sepolia (Less stable ⚠️)</option>
+                        <option value="base-sepolia">Base Sepolia (Less stable ⚠️)</option>
                       </select>
                     </div>
                     
@@ -1572,8 +1572,8 @@ export default function Home() {
                                 log('🌍 CROSS-CHAIN DEPOSIT - STEP 1: BRIDGE')
                                 log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
                                 const sourceChainName = sourceChain === 'arbitrum-sepolia' ? VAULT_CHAIN_NAME :
-                                                       sourceChain === 'base-sepolia' ? 'Base Arbitrum Sepolia' :
-                                                       sourceChain === 'optimism-sepolia' ? 'Optimism Arbitrum Sepolia' :
+                                                       sourceChain === 'base-sepolia' ? 'Base Sepolia' :
+                                                       sourceChain === 'optimism-sepolia' ? 'Optimism Sepolia' :
                                                        sourceChain === 'polygon-amoy' ? 'Polygon Amoy' : sourceChain
                                 log(`   Bridge: ${sourceChainName} → Arbitrum Sepolia (where vault is)`)
                                 log(`   Amount: ${crossChainAmount} USDC`)
