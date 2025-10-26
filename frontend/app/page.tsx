@@ -564,12 +564,15 @@ export default function Home() {
         log('💡 Tip: Use "Approve USDC" button above for one-time unlimited approval!')
         setStatus('Approving USDC...')
         
+        // Approve max uint256 for unlimited spending (one-time approval)
+        const maxApproval = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' // max uint256
+        
         const approvalTx = await provider.request({
           method: 'eth_sendTransaction',
           params: [{
             from: address,
             to: VAULT_USDC_ADDRESS, // ✅ FIX: Use dynamic USDC address for vault's chain
-            data: '0x095ea7b3' + VAULT_ADDRESS.slice(2).padStart(64, '0') + amountHex // approve(address,uint256)
+            data: '0x095ea7b3' + VAULT_ADDRESS.slice(2).padStart(64, '0') + maxApproval // approve(address,uint256) with max uint256
           }]
         })
         log(`✅ Approval tx: ${approvalTx}`)
@@ -1385,6 +1388,7 @@ export default function Home() {
                     {/* Step 1: Bridge from source chain (if not same as vault chain) */}
                     {sourceChain !== 'arbitrum-sepolia' && crossChainStep === 'idle' && currentChainId === getChainIdForSource(sourceChain) && (
                       <BridgeButton
+                        key={`bridge-${sourceChain}-${crossChainAmount || '0.1'}`} // ✅ Force remount when amount changes
                         prefill={{
                           fromChainId: sourceChain === 'sepolia' ? 11155111 :
                                       sourceChain === 'arbitrum-sepolia' ? 421614 : 
