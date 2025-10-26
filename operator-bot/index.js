@@ -29,8 +29,8 @@ dotenv.config({ path: join(__dirname, '../.env') })
 dotenv.config({ path: join(__dirname, '../contracts-foundry/.env') })
 
 // Configuration (from environment variables - FAIL FAST if missing)
-const VAULT_ADDRESS = process.env.ASYNCVAULT_ADDRESS
-const RPC_URL = process.env.ETHEREUM_SEPOLIA_RPC
+const VAULT_ADDRESS = process.env.VAULT_ADDRESS
+const RPC_URL = process.env.ARBITRUM_SEPOLIA_RPC_URL || process.env.ARBITRUM_SEPOLIA_RPC
 const OPERATOR_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY // Deployer is also operator
 const POLL_INTERVAL_MS = 5000 // Poll every 5 seconds
 const MAX_RETRIES = 3
@@ -38,12 +38,12 @@ const RETRY_DELAY_MS = 2000
 
 // Validate required environment variables
 if (!VAULT_ADDRESS) {
-  console.error('❌ ERROR: ASYNCVAULT_ADDRESS not set in .env')
-  console.error('   Please add: ASYNCVAULT_ADDRESS=0x...')
+  console.error('❌ ERROR: VAULT_ADDRESS not set in .env')
+  console.error('   Please add: VAULT_ADDRESS=0x...')
   process.exit(1)
 }
 if (!RPC_URL) {
-  console.error('❌ ERROR: ETHEREUM_SEPOLIA_RPC not set in .env')
+  console.error('❌ ERROR: ARBITRUM_SEPOLIA_RPC_URL not set in .env')
   process.exit(1)
 }
 if (!OPERATOR_PRIVATE_KEY) {

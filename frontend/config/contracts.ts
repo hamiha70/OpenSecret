@@ -11,10 +11,10 @@ if (!process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS) {
 }
 
 export const CONTRACTS = {
-  // AsyncVault deployed on Ethereum Sepolia (ERC4626 + Centrifuge pattern + operator)
+  // AsyncVault deployed on Arbitrum Sepolia (ERC4626 + Centrifuge pattern + operator)
   vault: {
     address: process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS as `0x${string}`,
-    chainId: 11155111, // Sepolia
+    chainId: 421614, // Arbitrum Sepolia
   },
   
   // USDC on multiple testnets (Circle's official deployments)
@@ -49,7 +49,7 @@ export const RPC_URLS = {
 export const BLOCK_EXPLORERS = {
   [CHAIN_IDS.SEPOLIA]: 'https://eth-sepolia.blockscout.com',
   [CHAIN_IDS.BASE_SEPOLIA]: 'https://base-sepolia.blockscout.com',
-  [CHAIN_IDS.ARBITRUM_SEPOLIA]: 'https://sepolia.arbiscan.io',
+  [CHAIN_IDS.ARBITRUM_SEPOLIA]: 'https://arbitrum-sepolia.blockscout.com', // Using Blockscout for consistency
 } as const;
 
 // Avail Nexus Bridge Address (placeholder - will be determined in Phase 3)

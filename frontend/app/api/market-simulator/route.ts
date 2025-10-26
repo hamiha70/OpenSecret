@@ -23,9 +23,9 @@ let txQueue: Promise<any> = Promise.resolve()
 let isProcessing = false
 
 // Configuration - Geometric Brownian Motion Parameters
-const VAULT_ADDRESS = process.env.ASYNCVAULT_ADDRESS || process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS
-const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Sepolia USDC
-const RPC_URL = process.env.ETHEREUM_SEPOLIA_RPC
+const VAULT_ADDRESS = process.env.VAULT_ADDRESS || process.env.NEXT_PUBLIC_ASYNCVAULT_ADDRESS
+const USDC_ADDRESS = '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d' // Arbitrum Sepolia USDC
+const RPC_URL = process.env.ARBITRUM_SEPOLIA_RPC_URL || process.env.ARBITRUM_SEPOLIA_RPC
 const SIMULATOR_PRIVATE_KEY = process.env.SIMULATOR_PRIVATE_KEY
 
 // Geometric Brownian Motion Configuration
@@ -55,8 +55,8 @@ let nextEventTime: number | null = null
 
 // Validate environment variables
 function validateEnv() {
-  if (!VAULT_ADDRESS) throw new Error('ASYNCVAULT_ADDRESS not set')
-  if (!RPC_URL) throw new Error('ETHEREUM_SEPOLIA_RPC not set')
+  if (!VAULT_ADDRESS) throw new Error('VAULT_ADDRESS not set')
+  if (!RPC_URL) throw new Error('ARBITRUM_SEPOLIA_RPC_URL not set')
   if (!SIMULATOR_PRIVATE_KEY) throw new Error('SIMULATOR_PRIVATE_KEY not set')
 }
 
